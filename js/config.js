@@ -11,7 +11,7 @@ const CONFIG = {
 
   // ── PASO 2: URL base de tu GitHub Pages ──
   // (ej: 'https://tuperfil.github.io/franquidia')
-  BASE_URL: 'https://github.com/joselineproa21/FranquiDia',
+  BASE_URL: 'https://joselineproa21.github.io/FranquiDia',
 
   // ── Nombre del negocio (aparece en la web) ──
   NOMBRE_NEGOCIO: 'FranquiDía',
