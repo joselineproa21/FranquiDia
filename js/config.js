@@ -53,5 +53,6 @@ const CONFIG = {
     F:   0,   // Festivo
     B:   0,   // Baja
     M2: 9.40,  // turno partido en dos tiendas (2h mañana + 6h tarde)
-},
-  };
+  },
+
+};
