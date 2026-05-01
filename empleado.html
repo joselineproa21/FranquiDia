@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mi horario — FranquiDía</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/empleado.css">
+</head>
+<body class="emp-view">
+
+  <div id="empLoading" class="loading-overlay">
+    <div class="loading-spinner"></div>
+    <p>Cargando tu horario...</p>
+  </div>
+
+  <div id="empError" class="error-state" style="display:none">
+    <div class="error-box">
+      <div class="error-icon">!</div>
+      <h2>Enlace no válido</h2>
+      <p>El enlace que has recibido parece incorrecto. Contacta con tu responsable de tienda.</p>
+    </div>
+  </div>
+
+  <main id="empMain" style="display:none" class="emp-main">
+
+    <div class="emp-header">
+      <div class="emp-logo">
+        <div class="logo-mark-sm">
+          <svg viewBox="0 0 16 16" fill="white" width="12" height="12">
+            <rect x="2" y="2" width="5" height="5" rx="1"/>
+            <rect x="9" y="2" width="5" height="5" rx="1"/>
+            <rect x="2" y="9" width="5" height="5" rx="1"/>
+            <rect x="9" y="9" width="5" height="5" rx="1"/>
+          </svg>
+        </div>
+        <span class="emp-logo-text">FranquiDía</span>
+      </div>
+      <span class="emp-readonly-badge">Solo lectura</span>
+    </div>
+
+    <div class="emp-card">
+      <div class="emp-profile">
+        <div class="emp-avatar" id="empAvatar"></div>
+        <div>
+          <div class="emp-fullname" id="empFullname"></div>
+          <div class="emp-meta" id="empMeta"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="emp-week-nav">
+      <button class="btn-sm" id="empPrevWeek">← Anterior</button>
+      <span class="emp-week-label" id="empWeekLabel"></span>
+      <button class="btn-sm" id="empNextWeek">Siguiente →</button>
+    </div>
+
+    <div id="empFestivoAlert"></div>
+
+    <div class="emp-schedule-card" id="empSchedule"></div>
+
+    <div class="emp-summary-card">
+      <div class="emp-summary-title">Tu resumen este mes</div>
+      <div class="emp-summary-grid" id="empSummary"></div>
+    </div>
+
+    <div class="emp-footer">
+      <p>Horario publicado por tu responsable. Para dudas o cambios, contacta directamente.</p>
+      <p class="emp-update-time" id="empUpdateTime"></p>
+    </div>
+
+  </main>
+
+  <script src="js/config.js"></script>
+  <script src="js/festivos.js"></script>
+  <script src="js/empleado.js"></script>
+</body>
+</html>
