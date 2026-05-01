@@ -284,14 +284,16 @@ function renderEmpleados() {
     const horas = calcHorasMes(emp.id);
     const contrato = parseInt(emp.horasContrato) || 160;
     const pct = Math.min(100, Math.round((horas / contrato) * 100));
+    // CÓDIGO CORREGIDO
     const horasExtra = DATA.turnos
       .filter(t => {
-        const emp = DATA.empleados.find(e => e.id === empId);
-        return emp && t.nombre === emp.nombre && (t.turno === 'XM' || t.turno === 'XT');
+        // Usamos emp.nombre directamente ya que estamos dentro del mapeo de empleados
+        return t.nombre === emp.nombre && (t.turno === 'XM' || t.turno === 'XT');
       })
       .reduce((acc, t) => acc + (CONFIG.HORAS_TURNO[t.turno] || 0), 0);
+    
     const extrasPendientes = DATA.incidencias.filter(i =>
-      i.empleadoId === empId && i.tipo === 'extra' && i.estado === 'pendiente'
+      i.empleadoId === emp.id && i.tipo === 'extra' && i.estado === 'pendiente'
     ).length;
     const exceso = horasExtra;
     const extrasHtml = exceso > 0
