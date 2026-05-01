@@ -35,8 +35,7 @@ function doGet(e) {
 
   return ContentService
     .createTextOutput(JSON.stringify(result))
-    .setMimeType(ContentService.MimeType.JSON)
-    .setHeaders({ 'Access-Control-Allow-Origin': '*' });
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 function getAllData() {
