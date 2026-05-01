@@ -527,8 +527,10 @@ function getTurno(empId, fecha, tiendaFiltro) {
 function calcHorasMes(empId) {
   const hoy = new Date();
   const mes = hoy.getMonth(); const año = hoy.getFullYear();
+  const emp = DATA.empleados.find(e => e.id === empId);
+  if (!emp) return 0;
   return DATA.turnos
-    .filter(t => { const d = new Date(t.fecha); return t.empleadoId === empId && d.getMonth() === mes && d.getFullYear() === año; })
+    .filter(t => { const d = new Date(t.fecha); return t.nombre === emp.nombre && d.getMonth() === mes && d.getFullYear() === año; })
     .reduce((acc, t) => acc + (CONFIG.HORAS_TURNO[t.turno] || 0), 0);
 }
 function calcHorasSemanaEmp(empId) {
