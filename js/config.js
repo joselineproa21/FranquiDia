@@ -19,7 +19,7 @@ const CONFIG = {
   // ── Colores por tienda (deben coincidir con los nombres en el Sheet) ──
   STORE_COLORS: {
     'ALM':   '#F5821F',
-    'COKINEITOR ':  '#3B8BD4',
+    'COKINEITOR':  '#3B8BD4',
     'PROAMAR':  '#1D9E75',
     'PROPINOS':      '#D4537E',
   },
@@ -44,15 +44,15 @@ const CONFIG = {
 },
 
   // ── Horas por turno (para calcular totales) ──
-  HORAS_TURNO: {
-    M:   6.40,   // Mañana
-    T:   6.40,   // Tarde
-    MT:  10.10,  // Mañana + tarde (turno partido)
-    L:   0,   // Libre
-    VAC: 0,   // Vacaciones
-    F:   0,   // Festivo
-    B:   0,   // Baja
-    M2: 9.40,  // turno partido en dos tiendas (2h mañana + 6h tarde)
+ HORAS_TURNO: {
+    M:   6.67,
+    T:   6.67,
+    MT:  10.17,
+    L:   0,
+    VAC: 0,
+    F:   0,
+    B:   0,
+    M2:  9.67,
   },
 
 };
