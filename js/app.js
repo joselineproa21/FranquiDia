@@ -602,7 +602,6 @@ function getMonday(d) {
   monday.setHours(0, 0, 0, 0);
   return monday;
 }
-}
 function addDays(d, n) { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
 function weekDays(monday) { return Array.from({length: 7}, (_, i) => toDateStr(addDays(monday, i))); }
 function toDateStr(d) { return d.toISOString().slice(0, 10); }
