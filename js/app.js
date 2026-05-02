@@ -47,7 +47,6 @@ async function loadData() {
   document.getElementById('errorState').style.display = 'none';
   document.getElementById('mainContent').style.display = 'none';
 
-  // Mostrar datos cacheados mientras carga
   const cached = localStorage.getItem('franquidia_data');
   if (cached) {
     try {
@@ -58,13 +57,10 @@ async function loadData() {
   }
 
   try {
-    const url = CONFIG.SCRIPT_URL + '?action=getData&t=' + Date.now();
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const json = await res.json();
-    if (json.error) throw new Error(json.error);
-    DATA = json;
-    localStorage.setItem('franquidia_data', JSON.stringify(json));
+    const data = await fetchJSONP(CONFIG.SCRIPT_URL + '?action=getData');
+    if (data.error) throw new Error(data.error);
+    DATA = data;
+    localStorage.setItem('franquidia_data', JSON.stringify(data));
     onDataLoaded();
   } catch (e) {
     if (!cached) {
@@ -72,9 +68,35 @@ async function loadData() {
       document.getElementById('errorState').style.display = 'flex';
       document.getElementById('errorMsg').textContent = 'Error: ' + e.message;
     } else {
-      document.getElementById('syncStatus').textContent = 'Sin conexión · Datos del ' + formatTime(new Date());
+      document.getElementById('syncStatus').textContent = 'Sin conexión · ' + formatTime(new Date());
     }
   }
+}
+
+function fetchJSONP(url) {
+  return new Promise((resolve, reject) => {
+    const cbName = 'cb_' + Date.now();
+    const script = document.createElement('script');
+    const timeout = setTimeout(() => {
+      cleanup();
+      reject(new Error('Timeout — el script tardó demasiado'));
+    }, 15000);
+
+    function cleanup() {
+      clearTimeout(timeout);
+      delete window[cbName];
+      if (script.parentNode) script.parentNode.removeChild(script);
+    }
+
+    window[cbName] = function(data) {
+      cleanup();
+      resolve(data);
+    };
+
+    script.src = url + '&callback=' + cbName;
+    script.onerror = () => { cleanup(); reject(new Error('Error al cargar el script')); };
+    document.head.appendChild(script);
+  });
 }
   
 
