@@ -593,16 +593,11 @@ function calcVacUsadas(empId) {
 // ── HELPERS DE FECHA ──
 function getMonday(d) {
   const date = new Date(d);
-  const day = date.getDay(); 
-  // En JS: Dom=0, Lun=1, Mar=2, Mié=3, Jue=4, Vie=5, Sáb=6
-  
-  // Calculamos cuántos días restar para llegar al lunes
-  // Si es domingo (0), restamos 6 días. Si es otro, restamos (día - 1)
-  const diff = date.getDate() - day + (day === 0 ? -6 : 1);
-  
-  const monday = new Date(date.setDate(diff));
-  monday.setHours(0, 0, 0, 0);
-  return monday;
+  date.setHours(0, 0, 0, 0);
+  const day = date.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  date.setDate(date.getDate() + diff);
+  return date;
 }
 function addDays(d, n) { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
 function weekDays(monday) { return Array.from({length: 7}, (_, i) => toDateStr(addDays(monday, i))); }
