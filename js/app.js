@@ -47,6 +47,16 @@ async function loadData() {
   document.getElementById('errorState').style.display = 'none';
   document.getElementById('mainContent').style.display = 'none';
 
+  // Mostrar datos cacheados mientras carga
+  const cached = localStorage.getItem('franquidia_data');
+  if (cached) {
+    try {
+      DATA = JSON.parse(cached);
+      onDataLoaded();
+      document.getElementById('syncStatus').textContent = 'Actualizando...';
+    } catch(e) {}
+  }
+
   try {
     const url = CONFIG.SCRIPT_URL + '?action=getData&t=' + Date.now();
     const res = await fetch(url);
@@ -54,14 +64,19 @@ async function loadData() {
     const json = await res.json();
     if (json.error) throw new Error(json.error);
     DATA = json;
+    localStorage.setItem('franquidia_data', JSON.stringify(json));
     onDataLoaded();
   } catch (e) {
-    document.getElementById('loadingState').style.display = 'none';
-    document.getElementById('errorState').style.display = 'flex';
-    document.getElementById('errorMsg').textContent = 'Error: ' + e.message +
-      '. Asegúrate de que el script está publicado como "Cualquiera" puede acceder.';
+    if (!cached) {
+      document.getElementById('loadingState').style.display = 'none';
+      document.getElementById('errorState').style.display = 'flex';
+      document.getElementById('errorMsg').textContent = 'Error: ' + e.message;
+    } else {
+      document.getElementById('syncStatus').textContent = 'Sin conexión · Datos del ' + formatTime(new Date());
+    }
   }
 }
+  
 
 function onDataLoaded() {
   document.getElementById('loadingState').style.display = 'none';
