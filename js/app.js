@@ -592,11 +592,18 @@ function calcVacUsadas(empId) {
 
 // ── HELPERS DE FECHA ──
 function getMonday(d) {
-  const s = typeof d === 'string' ? d : d.toLocaleDateString('sv');
-  const date = new Date(s + 'T12:00:00');
-  const day = date.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  date.setDate(date.getDate() + diff);
+  // Creamos la fecha asegurando que no haya problemas de zona horaria
+  const date = new Date(d);
+  date.setHours(12, 0, 0, 0); 
+  
+  const day = date.getDay(); // Dom=0, Lun=1...
+  
+  // Calculamos la diferencia: 
+  // Si es Domingo (0), restamos 6 días. 
+  // Si es otro día, restamos (día actual - 1).
+  const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+  
+  date.setDate(diff);
   return date;
 }
 function addDays(d, n) { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
