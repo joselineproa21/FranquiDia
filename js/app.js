@@ -250,7 +250,7 @@ function renderCuadrante() {
   }).join('');
   document.getElementById('festivoWeekAlert').innerHTML = alertHtml;
 
-  // 1. Filtro flexible para incluir 'activo' y 'activa'
+  // 1. Filtro flexible (incluye 'activa' o 'activo')
   let emps = DATA.empleados.filter(e => e.estado && e.estado.toLowerCase().includes('activ'));
 
   if (storeFilter) emps = emps.filter(e => e.tienda === storeFilter);
@@ -264,15 +264,14 @@ function renderCuadrante() {
     });
   }
 
-  // 2. Lógica de Ordenado: Por Tienda y luego por Jerarquía de Turno
+  // 2. Lógica de Ordenado: Tienda -> Turno Jerárquico
   const jerarquia = { 'M': 1, 'T': 2, 'MT': 3, 'L': 4, 'X': 5, 'VAC': 6, 'B': 7 };
   
   emps.sort((a, b) => {
-    // Primero ordenamos por nombre de tienda
     if (a.tienda < b.tienda) return -1;
     if (a.tienda > b.tienda) return 1;
     
-    // Si es la misma tienda, ordenamos por el turno del primer día de la semana (Lunes)
+    // Si es la misma tienda, miramos el turno del lunes
     const turnoA = getTurno(a.id, days[0]) || 'Z';
     const turnoB = getTurno(b.id, days[0]) || 'Z';
     return (jerarquia[turnoA] || 9) - (jerarquia[turnoB] || 9);
@@ -280,7 +279,7 @@ function renderCuadrante() {
 
   const gridCols = `140px repeat(${days.length}, 1fr)`;
 
-  // Header del cuadrante
+  // Header
   const headCells = days.map(d => {
     const isHoy = d === hoy;
     const fest  = esFestivo(d);
@@ -288,17 +287,17 @@ function renderCuadrante() {
     return `<div class="cuad-head-cell ${cls}">${formatDayHeader(d)}${fest ? ' ★' : ''}</div>`;
   }).join('');
 
-  // 3. Renderizado de filas con Separador Visual por Tienda
+  // 3. Renderizado de filas con Separador
   let lastStore = null;
   const rowsHtml = emps.map(emp => {
     let separatorHtml = '';
     
-    // Insertar encabezado gris si cambiamos de tienda
     if (emp.tienda !== lastStore) {
       lastStore = emp.tienda;
+      // El separador necesita ocupar todas las columnas (grid-column: 1 / -1)
       separatorHtml = `
-        <div style="grid-column: 1 / -1; background: #f1f3f4; padding: 10px 15px; font-size: 11px; font-weight: bold; color: #5f6368; border-bottom: 1px solid #e0e0e0; text-transform: uppercase; letter-spacing: 1px; display: flex; align-items: center; gap: 8px;">
-          <span style="font-size: 14px;">📍</span> TIENDA: ${emp.tienda}
+        <div class="store-group-header" style="grid-column: 1 / -1; background: #f8f9fa; padding: 10px 15px; font-size: 11px; font-weight: 700; color: #4a5568; border-bottom: 1px solid #edf2f7; text-transform: uppercase; letter-spacing: 1px; display: flex; align-items: center; gap: 8px; margin-top: 10px;">
+          <span style="background: white; padding: 2px 6px; border-radius: 4px; border: 1px solid #e2e8f0;">📍 TIENDA: ${emp.tienda}</span>
         </div>`;
     }
 
@@ -309,30 +308,33 @@ function renderCuadrante() {
       const colCls = isHoy ? 'today-col' : fest ? 'festivo-col' : '';
       const pillHtml = turno
         ? `<span class="pill pill-${turno.toLowerCase()}">${turno}</span>`
-        : `<span class="pill pill-v" style="color:var(--text3)">—</span>`;
+        : `<span class="pill pill-v" style="color:#cbd5e0">—</span>`;
       return `<div class="cuad-cell ${colCls}">${pillHtml}</div>`;
     }).join('');
 
     const storeColor = CONFIG.STORE_COLORS[emp.tienda] || '#888';
     
     return separatorHtml + `
-      <div class="cuad-row" style="grid-template-columns:${gridCols}">
+      <div class="cuad-row" style="grid-template-columns:${gridCols}; display: grid;">
         <div class="cuad-emp">
           <div class="avatar-xs" style="${avatarStyle(emp.nombre)}">${initials(emp.nombre)}</div>
-          <span>${emp.nombre.split(' ')[0]} ${emp.nombre.split(' ')[1]?.[0] || ''}.</span>
-          <span style="width:6px;height:6px;border-radius:50%;background:${storeColor};flex-shrink:0"></span>
+          <div style="display:flex; flex-direction:column; line-height:1.2">
+            <span style="font-weight:600; font-size:12px">${emp.nombre.split(' ')[0]}</span>
+            <span style="font-size:10px; color:#718096">${emp.puesto || ''}</span>
+          </div>
+          <span style="width:6px;height:6px;border-radius:50%;background:${storeColor};margin-left:auto"></span>
         </div>
         ${cells}
       </div>`;
   }).join('');
 
   document.getElementById('cuadranteTable').innerHTML = `
-    <div class="cuadrante">
-      <div class="cuad-head" style="grid-template-columns:${gridCols}">
-        <div class="cuad-head-cell" style="text-align:left;padding-left:10px">Empleado</div>
+    <div class="cuadrante" style="display: grid; width: 100%;">
+      <div class="cuad-head" style="grid-template-columns:${gridCols}; display: grid;">
+        <div class="cuad-head-cell" style="text-align:left;padding-left:10px">Equipo</div>
         ${headCells}
       </div>
-      ${rowsHtml || '<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">Sin empleados para este filtro</div>'}
+      ${rowsHtml || '<div style="padding:40px; text-align:center; color:#a0aec0;">No hay empleados activos para esta selección</div>'}
     </div>`;
 }
 
@@ -571,23 +573,26 @@ function copyToClipboard(text, btn) {
 
 // ── POPULATE STORE FILTERS ──
 function populateStoreFilters() {
-  const tiendas = [...new Set(DATA.empleados.map(e => e.tienda))];
-  ['filterStore', 'filterEmpStore'].forEach(id => {
+  // Obtenemos tiendas únicas
+  const tiendas = [...new Set(DATA.empleados.map(e => e.tienda))].filter(Boolean).sort();
+  
+  const filterIds = ['filterStore', 'filterEmpStore'];
+  
+  filterIds.forEach(id => {
     const sel = document.getElementById(id);
     if (!sel) return;
     
-    // Limpiamos las opciones actuales antes de añadir las nuevas
-    sel.innerHTML = id === 'filterStore' ? '<option value="">Todas las tiendas</option>' : '<option value="">Todas</option>';
+    // Esto es lo que evita que se repitan: vaciar antes de llenar
+    sel.innerHTML = id === 'filterStore' ? '<option value="">Todas las tiendas</option>' : '<option value="">Todas las tiendas</option>';
     
     tiendas.forEach(t => {
-      if (!t) return;
       const opt = document.createElement('option');
-      opt.value = t; opt.textContent = t;
+      opt.value = t;
+      opt.textContent = t;
       sel.appendChild(opt);
     });
   });
 }
-
 // ── HELPERS DE DATOS ──
 function getTurno(empId, fecha, tiendaFiltro) {
   const emp = DATA.empleados.find(e => e.id === empId);
