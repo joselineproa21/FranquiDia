@@ -593,10 +593,11 @@ function calcVacUsadas(empId) {
 // ── HELPERS DE FECHA ──
 function getMonday(d) {
   const date = new Date(d);
-  date.setHours(0, 0, 0, 0);
+  date.setHours(12, 0, 0, 0); // mediodía para evitar problemas de timezone
   const day = date.getDay();
   const diff = day === 0 ? -6 : 1 - day;
   date.setDate(date.getDate() + diff);
+  date.setHours(0, 0, 0, 0);
   return date;
 }
 function addDays(d, n) { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
