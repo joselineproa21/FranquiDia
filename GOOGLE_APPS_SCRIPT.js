@@ -21,20 +21,29 @@ const SHEET_ID = '1SazVeI1ulRlUJPQwXdN2djXzvBQp01Z0vXp5lkOweMo'; // ID del Googl
 
 function doGet(e) {
   const action = e.parameter.action || 'getData';
+  const callback = e.parameter.callback;
   let result;
 
   try {
     if (action === 'getData') {
       result = getAllData();
     } else {
-      result = { error: 'Acción no reconocida: ' + action };
+      result = { error: 'Acción no reconocida' };
     }
   } catch (err) {
     result = { error: err.toString() };
   }
 
+  const json = JSON.stringify(result);
+
+  if (callback) {
+    return ContentService
+      .createTextOutput(callback + '(' + json + ')')
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
+
   return ContentService
-    .createTextOutput(JSON.stringify(result))
+    .createTextOutput(json)
     .setMimeType(ContentService.MimeType.JSON);
 }
 
