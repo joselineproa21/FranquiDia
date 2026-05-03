@@ -240,7 +240,6 @@ function renderCuadrante() {
 
   document.getElementById('weekLabel').textContent = formatWeekRange(days[0], days[6]);
 
-  // Festivos
   const alertHtml = days.filter(d => esFestivo(d)).map(d => {
     const f = getFestivo(d);
     return `<div class="festivo-bar ${f.tipo === 'cierre' ? 'festivo-danger' : ''}">
@@ -250,18 +249,16 @@ function renderCuadrante() {
   }).join('');
   document.getElementById('festivoWeekAlert').innerHTML = alertHtml;
 
-  // Turnos de esta semana (por fecha del lunes)
   let turnosSemana = DATA.turnos.filter(t => t.fecha === fechaSemana);
   if (storeFilter) turnosSemana = turnosSemana.filter(t => t.tienda === storeFilter);
 
-  // Agrupar por tienda (del turno, no del empleado)
   const tiendas = [...new Set(turnosSemana.map(t => t.tienda))].filter(Boolean).sort();
-
   const diasKey = ['lun','mar','mie','jue','vie','sab','dom'];
   const gridCols = `180px repeat(7, 1fr)`;
+  const turnosUnicos = ['M', 'T', 'MT', 'B', 'L', 'VAC'];
+  const etiquetas = { M: 'Mañana', T: 'Tarde', MT: 'Partido', B: 'Baja', L: 'Libre', VAC: 'Vacaciones' };
 
-  // Header
-  const headCells = days.map((d, i) => {
+  const headCells = days.map(d => {
     const isHoy = d === hoy;
     const fest  = esFestivo(d);
     const cls   = isHoy ? 'today-h' : fest ? 'festivo-h' : '';
@@ -272,17 +269,12 @@ function renderCuadrante() {
 
   tiendas.forEach(tienda => {
     const color = CONFIG.STORE_COLORS[tienda] || '#888';
-    const turnosTienda = turnosSemana.filter(t => t.tienda === tienda);
-
-    // Filtrar por turno si hay filtro activo
-    let filas = turnosTienda;
+    let filas = turnosSemana.filter(t => t.tienda === tienda);
     if (turnoFilter) {
       filas = filas.filter(t => diasKey.some(dk => t[dk] === turnoFilter));
     }
-
     if (!filas.length) return;
 
-    // Cabecera de tienda
     htmlFinal += `
       <div style="grid-column:1/-1;background:${color}18;border-left:3px solid ${color};
         padding:8px 14px;font-weight:600;font-size:12px;color:${color};
@@ -291,44 +283,32 @@ function renderCuadrante() {
         ${days.map(() => '').join('')}
       </div>`;
 
-    // Filas de empleados
-    filas.forEach(turno => {
-      const emp = DATA.empleados.find(e => e.nombre === turno.nombre);
+    turnosUnicos.forEach(tipo => {
+      const hayAlguien = filas.some(t => diasKey.some(dk => t[dk] === tipo));
+      if (!hayAlguien) return;
+
       const cells = diasKey.map((dk, i) => {
-        const t = turno[dk];
         const isHoy = days[i] === hoy;
         const fest  = esFestivo(days[i]);
         const colCls = isHoy ? 'today-col' : fest ? 'festivo-col' : '';
-        const pillHtml = t && t !== '-' && t !== '—'
-          ? `<span class="pill pill-${t.toLowerCase()}">${t}</span>`
-          : `<span style="color:var(--text3);font-size:11px">—</span>`;
-        return `<div class="cuad-cell ${colCls}">${pillHtml}</div>`;
+        const personasHoy = filas.filter(t => t[dk] === tipo);
+        const nombresHtml = personasHoy.map(t =>
+          `<span class="pill pill-${tipo.toLowerCase()}" style="display:block;margin-bottom:2px;width:auto">${t.nombre.split(' ')[0]}</span>`
+        ).join('');
+        return `<div class="cuad-cell ${colCls}" style="flex-direction:column;align-items:flex-start;padding:4px;min-height:32px">${nombresHtml}</div>`;
       }).join('');
 
       htmlFinal += `
         <div class="cuad-row" style="grid-template-columns:${gridCols}">
-          <div class="cuad-emp">
-            <div class="avatar-xs" style="${avatarStyle(turno.nombre)}">${initials(turno.nombre)}</div>
-            <div>
-              <div>${turno.nombre}</div>
-              ${emp?.puesto ? `<div style="font-size:10px;color:var(--text3)">${emp.puesto}</div>` : ''}
-            </div>
-            <span style="width:6px;height:6px;border-radius:50%;background:${color};flex-shrink:0;margin-left:auto"></span>
+          <div class="cuad-emp" style="font-weight:500;font-size:11px;color:var(--text2)">
+            ${etiquetas[tipo] || tipo}
           </div>
           ${cells}
         </div>`;
     });
   });
 
-  document.getElementById('cuadranteTable').innerHTML = `
-    <div class="cuadrante">
-      <div class="cuad-head" style="grid-template-columns:${gridCols}">
-        <div class="cuad-head-cell" style="text-align:left;padding-left:10px">Empleado</div>
-        ${headCells}
-      </div>
-      ${htmlFinal || '<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">No hay turnos para esta semana</div>'}
-    </div>`;
-}
+  document.getElementById('cuadranteTable'
 // ── EMPLEADOS ──
 function renderEmpleados() {
   const search = document.getElementById('searchEmp').value.toLowerCase();
