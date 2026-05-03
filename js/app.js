@@ -233,104 +233,102 @@ function renderResumen() {
 // ── CUADRANTE ──
 function renderCuadrante() {
   const days = weekDays(currentWeekStart);
-  const hoy = toDateStr(new Date());
+  const hoy  = toDateStr(new Date());
   const storeFilter = document.getElementById('filterStore').value;
+  const turnoFilter = document.getElementById('filterTurno').value;
   const fechaSemana = toDateStr(currentWeekStart);
 
-  // Actualizar etiqueta de semana
   document.getElementById('weekLabel').textContent = formatWeekRange(days[0], days[6]);
 
-  // Gestión de Festivos
-  const festivosSemana = days.filter(d => esFestivo(d));
-  const alertHtml = festivosSemana.map(d => {
+  // Festivos
+  const alertHtml = days.filter(d => esFestivo(d)).map(d => {
     const f = getFestivo(d);
     return `<div class="festivo-bar ${f.tipo === 'cierre' ? 'festivo-danger' : ''}">
       <strong>${formatDateLong(d)} — ${f.nombre}:</strong>
-      ${f.tipo === 'cierre' ? 'Tiendas cerradas' : 'Horario reducido 10:00–15:00'}
+      ${f.tipo === 'cierre' ? 'Tiendas cerradas' : 'Horario reducido'}
     </div>`;
   }).join('');
   document.getElementById('festivoWeekAlert').innerHTML = alertHtml;
 
-  // 1. Extraer turnos de la semana desde DATA.turnos (La hoja de "Turnos")
+  // Turnos de esta semana (por fecha del lunes)
   let turnosSemana = DATA.turnos.filter(t => t.fecha === fechaSemana);
-  
-  if (storeFilter) {
-    turnosSemana = turnosSemana.filter(t => t.tienda === storeFilter);
-  }
+  if (storeFilter) turnosSemana = turnosSemana.filter(t => t.tienda === storeFilter);
 
-  // 2. Definición de la estructura de la vista (Filas por Turno)
-  const bloquesHorarios = ['M', 'T', 'MT', 'B', 'L'];
-  const etiquetas = { 
-    'M': 'Mañana', 
-    'T': 'Tarde', 
-    'MT': 'Mañana y Tarde', 
-    'B': 'Bajas/Incidencias', 
-    'L': 'Libranzas' 
-  };
+  // Agrupar por tienda (del turno, no del empleado)
+  const tiendas = [...new Set(turnosSemana.map(t => t.tienda))].filter(Boolean).sort();
 
-  // 3. Obtener tiendas únicas presentes en los turnos de esta semana
-  const tiendas = [...new Set(turnosSemana.map(t => t.tienda))].sort();
-  const diasClaves = ['lun', 'mar', 'mie', 'jue', 'vie', 'sab', 'dom'];
+  const diasKey = ['lun','mar','mie','jue','vie','sab','dom'];
+  const gridCols = `180px repeat(7, 1fr)`;
+
+  // Header
+  const headCells = days.map((d, i) => {
+    const isHoy = d === hoy;
+    const fest  = esFestivo(d);
+    const cls   = isHoy ? 'today-h' : fest ? 'festivo-h' : '';
+    return `<div class="cuad-head-cell ${cls}">${formatDayHeader(d)}${fest ? ' ★' : ''}</div>`;
+  }).join('');
 
   let htmlFinal = '';
 
   tiendas.forEach(tienda => {
-    // Separador de Tienda (Basado en la hoja de Turnos)
+    const color = CONFIG.STORE_COLORS[tienda] || '#888';
+    const turnosTienda = turnosSemana.filter(t => t.tienda === tienda);
+
+    // Filtrar por turno si hay filtro activo
+    let filas = turnosTienda;
+    if (turnoFilter) {
+      filas = filas.filter(t => diasKey.some(dk => t[dk] === turnoFilter));
+    }
+
+    if (!filas.length) return;
+
+    // Cabecera de tienda
     htmlFinal += `
-      <div class="store-group-header" style="grid-column: 1 / -1; background: #f8fafc; padding: 12px 15px; font-weight: 700; color: #1e293b; border-bottom: 2px solid #e2e8f0; margin-top: 20px; display: flex; align-items: center; gap: 10px;">
-        <span style="font-size: 16px;">📍</span> TIENDA: ${tienda}
+      <div style="grid-column:1/-1;background:${color}18;border-left:3px solid ${color};
+        padding:8px 14px;font-weight:600;font-size:12px;color:${color};
+        display:grid;grid-template-columns:${gridCols};align-items:center;margin-top:8px">
+        <span>📍 ${tienda}</span>
+        ${days.map(() => '').join('')}
       </div>`;
 
-    // Generar filas para cada bloque horario
-    bloquesHorarios.forEach(tipo => {
-      const cells = diasClaves.map((diaKey, idx) => {
-        // Buscamos quién tiene este turno (tipo) en esta tienda y este día
-        const personal = turnosSemana.filter(t => t.tienda === tienda && t[diaKey] === tipo);
-        
-        const nombresHtml = personal.map(p => `
-          <div class="name-badge pill-${tipo.toLowerCase()}" style="margin-bottom: 4px; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,0.05); border: 1px solid rgba(0,0,0,0.05);">
-            ${p.nombre.split(' ')[0]}
-          </div>
-        `).join('');
-
-        const isHoy = days[idx] === hoy;
-        const fest = esFestivo(days[idx]);
+    // Filas de empleados
+    filas.forEach(turno => {
+      const emp = DATA.empleados.find(e => e.nombre === turno.nombre);
+      const cells = diasKey.map((dk, i) => {
+        const t = turno[dk];
+        const isHoy = days[i] === hoy;
+        const fest  = esFestivo(days[i]);
         const colCls = isHoy ? 'today-col' : fest ? 'festivo-col' : '';
-
-        return `<div class="cuad-cell ${colCls}" style="min-height: 55px; display: flex; flex-direction: column; justify-content: flex-start; padding: 6px 4px; border-right: 1px solid #edf2f7;">
-          ${nombresHtml}
-        </div>`;
+        const pillHtml = t && t !== '-' && t !== '—'
+          ? `<span class="pill pill-${t.toLowerCase()}">${t}</span>`
+          : `<span style="color:var(--text3);font-size:11px">—</span>`;
+        return `<div class="cuad-cell ${colCls}">${pillHtml}</div>`;
       }).join('');
 
       htmlFinal += `
-        <div class="cuad-row" style="grid-template-columns: 140px repeat(7, 1fr); display: grid; border-bottom: 1px solid #edf2f7;">
-          <div class="cuad-emp" style="background: #ffffff; font-weight: 600; color: #64748b; font-size: 12px; padding-left: 15px; display: flex; align-items: center;">
-            ${etiquetas[tipo]}
+        <div class="cuad-row" style="grid-template-columns:${gridCols}">
+          <div class="cuad-emp">
+            <div class="avatar-xs" style="${avatarStyle(turno.nombre)}">${initials(turno.nombre)}</div>
+            <div>
+              <div>${turno.nombre}</div>
+              ${emp?.puesto ? `<div style="font-size:10px;color:var(--text3)">${emp.puesto}</div>` : ''}
+            </div>
+            <span style="width:6px;height:6px;border-radius:50%;background:${color};flex-shrink:0;margin-left:auto"></span>
           </div>
           ${cells}
         </div>`;
     });
   });
 
-  // 4. Renderizado de la tabla completa
-  const gridCols = `140px repeat(7, 1fr)`;
-  const headCells = days.map(d => {
-    const isHoy = d === hoy;
-    const fest = esFestivo(d);
-    const cls = isHoy ? 'today-h' : fest ? 'festivo-h' : '';
-    return `<div class="cuad-head-cell ${cls}">${formatDayHeader(d)}${fest ? ' ★' : ''}</div>`;
-  }).join('');
-
   document.getElementById('cuadranteTable').innerHTML = `
-    <div class="cuadrante" style="display: grid; width: 100%; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
-      <div class="cuad-head" style="grid-template-columns:${gridCols}; display: grid; background: #f1f5f9;">
-        <div class="cuad-head-cell" style="text-align:left; padding-left:15px; font-weight: 700; color: #475569;">HORARIOS</div>
+    <div class="cuadrante">
+      <div class="cuad-head" style="grid-template-columns:${gridCols}">
+        <div class="cuad-head-cell" style="text-align:left;padding-left:10px">Empleado</div>
         ${headCells}
       </div>
-      ${htmlFinal || '<div style="padding:40px; text-align:center; color:#94a3b8;">No hay turnos registrados en esta semana</div>'}
+      ${htmlFinal || '<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">No hay turnos para esta semana</div>'}
     </div>`;
 }
-
 // ── EMPLEADOS ──
 function renderEmpleados() {
   const search = document.getElementById('searchEmp').value.toLowerCase();
