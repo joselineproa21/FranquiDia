@@ -233,13 +233,14 @@ function renderResumen() {
 // ── CUADRANTE ──
 function renderCuadrante() {
   const days = weekDays(currentWeekStart);
-  const hoy  = toDateStr(new Date());
+  const hoy = toDateStr(new Date());
   const storeFilter = document.getElementById('filterStore').value;
-  const turnoFilter = document.getElementById('filterTurno').value;
+  const fechaSemana = toDateStr(currentWeekStart);
 
+  // Actualizar etiqueta de semana
   document.getElementById('weekLabel').textContent = formatWeekRange(days[0], days[6]);
 
-  // Festivos en esta semana
+  // Gestión de Festivos
   const festivosSemana = days.filter(d => esFestivo(d));
   const alertHtml = festivosSemana.map(d => {
     const f = getFestivo(d);
@@ -250,91 +251,83 @@ function renderCuadrante() {
   }).join('');
   document.getElementById('festivoWeekAlert').innerHTML = alertHtml;
 
-  // 1. Filtro flexible (incluye 'activa' o 'activo')
-  let emps = DATA.empleados.filter(e => e.estado && e.estado.toLowerCase().includes('activ'));
-
-  if (storeFilter) emps = emps.filter(e => e.tienda === storeFilter);
-
-  if (turnoFilter) {
-    emps = emps.filter(emp => {
-      return days.some(d => {
-        const t = getTurno(emp.id, d);
-        return t === turnoFilter;
-      });
-    });
+  // 1. Extraer turnos de la semana desde DATA.turnos (La hoja de "Turnos")
+  let turnosSemana = DATA.turnos.filter(t => t.fecha === fechaSemana);
+  
+  if (storeFilter) {
+    turnosSemana = turnosSemana.filter(t => t.tienda === storeFilter);
   }
 
-  // 2. Lógica de Ordenado: Tienda -> Turno Jerárquico
-  const jerarquia = { 'M': 1, 'T': 2, 'MT': 3, 'L': 4, 'X': 5, 'VAC': 6, 'B': 7 };
-  
-  emps.sort((a, b) => {
-    if (a.tienda < b.tienda) return -1;
-    if (a.tienda > b.tienda) return 1;
-    
-    // Si es la misma tienda, miramos el turno del lunes
-    const turnoA = getTurno(a.id, days[0]) || 'Z';
-    const turnoB = getTurno(b.id, days[0]) || 'Z';
-    return (jerarquia[turnoA] || 9) - (jerarquia[turnoB] || 9);
+  // 2. Definición de la estructura de la vista (Filas por Turno)
+  const bloquesHorarios = ['M', 'T', 'MT', 'B', 'L'];
+  const etiquetas = { 
+    'M': 'Mañana', 
+    'T': 'Tarde', 
+    'MT': 'Mañana y Tarde', 
+    'B': 'Bajas/Incidencias', 
+    'L': 'Libranzas' 
+  };
+
+  // 3. Obtener tiendas únicas presentes en los turnos de esta semana
+  const tiendas = [...new Set(turnosSemana.map(t => t.tienda))].sort();
+  const diasClaves = ['lun', 'mar', 'mie', 'jue', 'vie', 'sab', 'dom'];
+
+  let htmlFinal = '';
+
+  tiendas.forEach(tienda => {
+    // Separador de Tienda (Basado en la hoja de Turnos)
+    htmlFinal += `
+      <div class="store-group-header" style="grid-column: 1 / -1; background: #f8fafc; padding: 12px 15px; font-weight: 700; color: #1e293b; border-bottom: 2px solid #e2e8f0; margin-top: 20px; display: flex; align-items: center; gap: 10px;">
+        <span style="font-size: 16px;">📍</span> TIENDA: ${tienda}
+      </div>`;
+
+    // Generar filas para cada bloque horario
+    bloquesHorarios.forEach(tipo => {
+      const cells = diasClaves.map((diaKey, idx) => {
+        // Buscamos quién tiene este turno (tipo) en esta tienda y este día
+        const personal = turnosSemana.filter(t => t.tienda === tienda && t[diaKey] === tipo);
+        
+        const nombresHtml = personal.map(p => `
+          <div class="name-badge pill-${tipo.toLowerCase()}" style="margin-bottom: 4px; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,0.05); border: 1px solid rgba(0,0,0,0.05);">
+            ${p.nombre.split(' ')[0]}
+          </div>
+        `).join('');
+
+        const isHoy = days[idx] === hoy;
+        const fest = esFestivo(days[idx]);
+        const colCls = isHoy ? 'today-col' : fest ? 'festivo-col' : '';
+
+        return `<div class="cuad-cell ${colCls}" style="min-height: 55px; display: flex; flex-direction: column; justify-content: flex-start; padding: 6px 4px; border-right: 1px solid #edf2f7;">
+          ${nombresHtml}
+        </div>`;
+      }).join('');
+
+      htmlFinal += `
+        <div class="cuad-row" style="grid-template-columns: 140px repeat(7, 1fr); display: grid; border-bottom: 1px solid #edf2f7;">
+          <div class="cuad-emp" style="background: #ffffff; font-weight: 600; color: #64748b; font-size: 12px; padding-left: 15px; display: flex; align-items: center;">
+            ${etiquetas[tipo]}
+          </div>
+          ${cells}
+        </div>`;
+    });
   });
 
-  const gridCols = `140px repeat(${days.length}, 1fr)`;
-
-  // Header
+  // 4. Renderizado de la tabla completa
+  const gridCols = `140px repeat(7, 1fr)`;
   const headCells = days.map(d => {
     const isHoy = d === hoy;
-    const fest  = esFestivo(d);
-    const cls   = isHoy ? 'today-h' : fest ? 'festivo-h' : '';
+    const fest = esFestivo(d);
+    const cls = isHoy ? 'today-h' : fest ? 'festivo-h' : '';
     return `<div class="cuad-head-cell ${cls}">${formatDayHeader(d)}${fest ? ' ★' : ''}</div>`;
   }).join('');
 
-  // 3. Renderizado de filas con Separador
-  let lastStore = null;
-  const rowsHtml = emps.map(emp => {
-    let separatorHtml = '';
-    
-    if (emp.tienda !== lastStore) {
-      lastStore = emp.tienda;
-      // El separador necesita ocupar todas las columnas (grid-column: 1 / -1)
-      separatorHtml = `
-        <div class="store-group-header" style="grid-column: 1 / -1; background: #f8f9fa; padding: 10px 15px; font-size: 11px; font-weight: 700; color: #4a5568; border-bottom: 1px solid #edf2f7; text-transform: uppercase; letter-spacing: 1px; display: flex; align-items: center; gap: 8px; margin-top: 10px;">
-          <span style="background: white; padding: 2px 6px; border-radius: 4px; border: 1px solid #e2e8f0;">📍 TIENDA: ${emp.tienda}</span>
-        </div>`;
-    }
-
-    const cells = days.map(d => {
-      const turno = getTurno(emp.id, d);
-      const isHoy = d === hoy;
-      const fest  = esFestivo(d);
-      const colCls = isHoy ? 'today-col' : fest ? 'festivo-col' : '';
-      const pillHtml = turno
-        ? `<span class="pill pill-${turno.toLowerCase()}">${turno}</span>`
-        : `<span class="pill pill-v" style="color:#cbd5e0">—</span>`;
-      return `<div class="cuad-cell ${colCls}">${pillHtml}</div>`;
-    }).join('');
-
-    const storeColor = CONFIG.STORE_COLORS[emp.tienda] || '#888';
-    
-    return separatorHtml + `
-      <div class="cuad-row" style="grid-template-columns:${gridCols}; display: grid;">
-        <div class="cuad-emp">
-          <div class="avatar-xs" style="${avatarStyle(emp.nombre)}">${initials(emp.nombre)}</div>
-          <div style="display:flex; flex-direction:column; line-height:1.2">
-            <span style="font-weight:600; font-size:12px">${emp.nombre.split(' ')[0]}</span>
-            <span style="font-size:10px; color:#718096">${emp.puesto || ''}</span>
-          </div>
-          <span style="width:6px;height:6px;border-radius:50%;background:${storeColor};margin-left:auto"></span>
-        </div>
-        ${cells}
-      </div>`;
-  }).join('');
-
   document.getElementById('cuadranteTable').innerHTML = `
-    <div class="cuadrante" style="display: grid; width: 100%;">
-      <div class="cuad-head" style="grid-template-columns:${gridCols}; display: grid;">
-        <div class="cuad-head-cell" style="text-align:left;padding-left:10px">Equipo</div>
+    <div class="cuadrante" style="display: grid; width: 100%; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+      <div class="cuad-head" style="grid-template-columns:${gridCols}; display: grid; background: #f1f5f9;">
+        <div class="cuad-head-cell" style="text-align:left; padding-left:15px; font-weight: 700; color: #475569;">HORARIOS</div>
         ${headCells}
       </div>
-      ${rowsHtml || '<div style="padding:40px; text-align:center; color:#a0aec0;">No hay empleados activos para esta selección</div>'}
+      ${htmlFinal || '<div style="padding:40px; text-align:center; color:#94a3b8;">No hay turnos registrados en esta semana</div>'}
     </div>`;
 }
 
