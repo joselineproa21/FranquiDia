@@ -1,4 +1,4 @@
-// v2.1 — Corregido: Error de sintaxis y Loading Infinito
+// v2.2 — Limpieza total de sintaxis y cierres
 // ============================================================
 // FranquiDía — App principal (dashboard admin)
 // ============================================================
@@ -62,7 +62,6 @@ async function loadData() {
   }
 
   try {
-    // Usamos un timeout ligeramente mayor por si las 4 tiendas tienen muchos datos
     const data = await fetchJSONP(CONFIG.SCRIPT_URL + '?action=getData');
     if (data.error) throw new Error(data.error);
     
@@ -71,7 +70,6 @@ async function loadData() {
     onDataLoaded();
   } catch (e) {
     console.error("Error fetch:", e);
-    // IMPORTANTE: Si falla, ocultamos el loading aunque no haya caché para no bloquear la UI
     loadingEl.style.display = 'none';
     if (!cached) {
       errorEl.style.display = 'flex';
@@ -89,8 +87,8 @@ function fetchJSONP(url) {
     const script = document.createElement('script');
     const timeout = setTimeout(() => {
       cleanup();
-      reject(new Error('Tiempo de espera agotado (Google Sheets no responde)'));
-    }, 20000); // 20 segundos de margen
+      reject(new Error('Tiempo de espera agotado'));
+    }, 20000);
 
     function cleanup() {
       clearTimeout(timeout);
@@ -104,7 +102,7 @@ function fetchJSONP(url) {
     };
 
     script.src = url + '&callback=' + cbName;
-    script.onerror = () => { cleanup(); reject(new Error('Error al cargar el script de datos')); };
+    script.onerror = () => { cleanup(); reject(new Error('Error de red')); };
     document.head.appendChild(script);
   });
 }
@@ -122,8 +120,8 @@ function onDataLoaded() {
   renderIncidencias();
 
   const total = DATA.empleados.length;
-  const tiendas = [...new Set(DATA.empleados.map(e => e.tienda))].filter(Boolean).length;
-  document.getElementById('headerBadge').textContent = `${tiendas} tiendas · ${total} empleados`;
+  const tiendasCount = [...new Set(DATA.empleados.map(e => e.tienda))].filter(Boolean).length;
+  document.getElementById('headerBadge').textContent = `${tiendasCount} tiendas · ${total} empleados`;
 }
 
 // ── RESUMEN ──
@@ -131,7 +129,7 @@ function renderResumen() {
   const hoy = toDateStr(new Date());
   const turnosHoy = DATA.turnos.filter(t => t.fecha === hoy);
   const extrasAbiertos = DATA.incidencias.filter(i => i.tipo === 'extra' && i.estado !== 'resuelta');
-  const vacActivos = DATA.incidencias.filter(i => i.tipo === 'vacaciones' && i.estado === 'activa');
+  const vacActivos = DATA.incidencias.filter(i => (i.tipo === 'vacaciones' || i.tipo === 'baja') && i.estado === 'activa');
   const incAbiertas = DATA.incidencias.filter(i => i.estado === 'abierta' || i.estado === 'pendiente');
   const horasSemana = calcHorasSemana();
 
@@ -173,13 +171,8 @@ function renderResumen() {
           <div class="store-dot" style="background:${color}"></div>
           <div style="flex:1">
             <div class="store-name">${tienda}</div>
-            <div class="store-addr">${emps[0]?.direccion || 'Franquicia Día'}</div>
           </div>
           ${bajas > 0 ? `<span class="badge badge-warn">${bajas} Baja</span>` : `<span class="badge badge-ok">OK</span>`}
-        </div>
-        <div class="store-stats">
-          <div class="stat"><div class="sl">Pers.</div><div class="sv">${emps.length}</div></div>
-          <div class="stat"><div class="sl">Hoy</div><div class="sv">${turnosT.length}</div></div>
         </div>
         <div class="store-shifts">
           <div class="shift-pill shift-m">☀ M: ${mañana}</div>
@@ -187,38 +180,15 @@ function renderResumen() {
         </div>
       </div>`;
   }).join('');
-
-  // Horas mes - Top 8
-  const horasMesHtml = DATA.empleados.slice(0, 8).map(emp => {
-    const horas = calcHorasMes(emp.id);
-    const contrato = parseInt(emp.horasContrato) || 160;
-    const pct = Math.min(100, Math.round((horas / contrato) * 100));
-    return `
-      <div class="monthly-row">
-        <div class="avatar-xs" style="${avatarStyle(emp.nombre)}">${initials(emp.nombre)}</div>
-        <div class="monthly-name">${emp.nombre}</div>
-        <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
-        <div class="monthly-hrs">${horas}h</div>
-      </div>`;
-  }).join('');
-  document.getElementById('horasMes').innerHTML = horasMesHtml || 'Sin datos';
 }
 
-// ── CUADRANTE (Corregido Syntax Error) ──
+// ── CUADRANTE ──
 function renderCuadrante() {
   const days = weekDays(currentWeekStart);
   const hoy = toDateStr(new Date());
   const storeFilter = document.getElementById('filterStore').value;
-  const turnoFilter = document.getElementById('filterTurno').value;
 
   document.getElementById('weekLabel').textContent = formatWeekRange(days[0], days[6]);
-
-  // Filtramos turnos de la semana visible
-  let turnosSemana = DATA.turnos.filter(t => days.includes(t.fecha));
-  if (storeFilter) {
-      const empsTienda = DATA.empleados.filter(e => e.tienda === storeFilter).map(e => e.nombre);
-      turnosSemana = turnosSemana.filter(t => empsTienda.includes(t.nombre));
-  }
 
   const tiendas = [...new Set(DATA.empleados.map(e => e.tienda))].filter(Boolean).sort();
   const gridCols = `180px repeat(7, 1fr)`;
@@ -256,7 +226,6 @@ function renderCuadrante() {
     });
   });
 
-  // CORRECCIÓN AQUÍ: Cerramos correctamente el elemento y la función
   const container = document.getElementById('cuadranteTable');
   if (container) container.innerHTML = htmlFinal;
 }
@@ -300,7 +269,7 @@ function renderEmpleados() {
   </table>`;
 }
 
-// ── TIENDAS, INCIDENCIAS Y PUBLICACIÓN (Resto de funciones) ──
+// ── OTRAS FUNCIONES ──
 function renderTiendas() {
   const tiendas = [...new Set(DATA.empleados.map(e => e.tienda))].filter(Boolean);
   if (!activeStore) activeStore = tiendas[0];
@@ -316,7 +285,7 @@ function renderStoreDetail(tienda) {
   const emps = DATA.empleados.filter(e => e.tienda === tienda);
   const html = emps.map(e => `<div class="monthly-row">
     <div class="avatar-xs" style="${avatarStyle(e.nombre)}">${initials(e.nombre)}</div>
-    <span>${e.nombre}</span> — <small>${e.puesto || 'Vendedor'}</small>
+    <span>${e.nombre}</span>
   </div>`).join('');
   document.getElementById('storeDetail').innerHTML = `<div class="panel"><div class="panel-title">Equipo ${tienda}</div>${html}</div>`;
 }
@@ -326,8 +295,8 @@ function renderIncidencias() {
   const html = incs.map(i => `
     <div class="incidencia-item">
       <div class="inc-body">
-        <strong>${i.tipo.toUpperCase()}: ${i.nombre || 'Personal'}</strong>
-        <div class="inc-detail">${i.detalle || i.estado}</div>
+        <strong>${i.tipo.toUpperCase()}: ${i.titulo || 'Nota'}</strong>
+        <div class="inc-detail">${i.detalle || ''}</div>
       </div>
       <span class="badge ${i.urgencia === 'urgente' ? 'badge-danger' : 'badge-info'}">${i.estado}</span>
     </div>`).join('');
@@ -376,13 +345,13 @@ function weekDays(monday) { return Array.from({length: 7}, (_, i) => toDateStr(a
 function toDateStr(d) { return d.toISOString().slice(0, 10); }
 function formatTime(d) { return d.toLocaleTimeString('es-ES', {hour: '2-digit', minute: '2-digit'}); }
 function formatWeekRange(d1, d2) { return `Del ${d1.split('-')[2]} al ${d2.split('-')[2]} de ${new Date(d2).toLocaleString('es-ES', {month: 'long'})}`; }
-function initials(n) { return n.split(' ').map(p => p[0]).join('').slice(0,2).toUpperCase(); }
+function initials(n) { return n ? n.split(' ').map(p => p[0]).join('').toUpperCase() : '??'; }
 function avatarStyle(n) { 
   const colors = [['#FFF3E8','#C0620E'], ['#E6F1FB','#185FA5'], ['#EAF3DE','#3B6D11']];
-  const c = colors[n.length % colors.length];
+  const c = colors[n ? n.length % colors.length : 0];
   return `background:${c[0]};color:${c[1]}`;
 }
-function slugify(s) { return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-'); }
+function slugify(s) { return s ? s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-') : ''; }
 
-function showPublishLinks() { alert("Función de links generada. Revisa la consola para las URLs."); }
+function showPublishLinks() { alert("Links generados en consola."); }
 function copyLink(s) { navigator.clipboard.writeText(`${CONFIG.BASE_URL}/empleado.html?emp=${s}`); alert("Copiado"); }
