@@ -115,4 +115,74 @@
 
         // Leyenda
         let html = `
-            <div style="display:flex; gap:8px; padding:12px; flex-wrap:wrap; background:#fff; border-bottom:1px
+            <div style="display:flex; gap:8px; padding:12px; flex-wrap:wrap; background:#fff; border-bottom:1px solid #eee; justify-content:center; font-size:10px;">
+                <div style="display:flex; align-items:center; gap:4px"><span class="pill pill-m">M</span> Mañana</div>
+                <div style="display:flex; align-items:center; gap:4px"><span class="pill pill-t">T</span> Tarde</div>
+                <div style="display:flex; align-items:center; gap:4px"><span class="pill pill-mt">MT</span> Partido</div>
+                <div style="display:flex; align-items:center; gap:4px"><span class="pill pill-l">L</span> Libranza</div>
+            </div>`;
+
+        // Cabecera
+        const colorTienda = (CONFIG.STORE_COLORS && CONFIG.STORE_COLORS[activeStore]) || '#dc3545';
+        html += `
+            <div style="display:grid; grid-template-columns:${gridCols}; background:${colorTienda}; color:white; padding:10px 0; font-weight:bold; font-size:11px; text-align:center;">
+                <div>Horario</div>
+                ${nombresDias.map(dia => `<div>${dia}</div>`).join('')}
+            </div>`;
+
+        // Filtrar y ordenar personas de la tienda
+        const nombresUnicos = [...new Set(DATA.turnos
+            .filter(t => t.tienda === activeStore && days.includes(t.fecha) && !['L', 'VAC', 'F', 'B'].includes(t.turno))
+            .map(t => t.nombre))];
+
+        let personas = nombresUnicos.map(nombre => {
+            const turnos = DATA.turnos.filter(t => t.nombre === nombre && t.tienda === activeStore && days.includes(t.fecha));
+            let prioridad = 3; 
+            let etiqueta = 'Partido';
+            if (turnos.some(t => t.turno === 'M')) { prioridad = 1; etiqueta = 'Mañana'; }
+            else if (turnos.some(t => t.turno === 'T')) { prioridad = 2; etiqueta = 'Tarde'; }
+            return { nombre, etiqueta, prioridad };
+        }).sort((a, b) => a.prioridad - b.prioridad);
+
+        // Filas
+        personas.forEach(p => {
+            const primerNombre = p.nombre.split(' ')[0];
+            const celdas = days.map(d => {
+                const t = DATA.turnos.find(turno => turno.nombre === p.nombre && turno.tienda === activeStore && turno.fecha === d);
+                const val = t ? t.turno : 'L';
+                const esInactivo = ['L', 'VAC', 'F', 'B'].includes(val);
+                return `
+                    <div class="cuad-cell ${d === hoy ? 'today-col' : ''}">
+                        <span class="pill pill-${val.toLowerCase()}">
+                            ${esInactivo ? '-' : primerNombre}
+                        </span>
+                    </div>`;
+            }).join('');
+
+            html += `
+                <div class="cuad-row" style="grid-template-columns:${gridCols}">
+                    <div class="cuad-emp">${p.etiqueta}</div>
+                    ${celdas}
+                </div>`;
+        });
+
+        document.getElementById('cuadranteTable').innerHTML = html || '<div style="padding:40px; text-align:center">No hay turnos.</div>';
+    }
+
+    // --- FUNCIONES DE APOYO ---
+    function getMonday(d) {
+        d = new Date(d);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        const monday = new Date(d.setDate(diff));
+        monday.setHours(0,0,0,0);
+        return monday;
+    }
+    function addDays(d, n) { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
+    function weekDays(monday) { return Array.from({length: 7}, (_, i) => addDays(monday, i).toISOString().slice(0, 10)); }
+    function changeWeek(n) { currentWeekStart = addDays(currentWeekStart, n); render(); }
+
+    window.onload = init;
+</script>
+</body>
+</html>
