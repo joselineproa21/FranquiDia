@@ -193,68 +193,75 @@ function renderCuadrante() {
   const days = weekDays(currentWeekStart);
   const hoy = toDateStr(new Date());
   const storeFilter = document.getElementById('filterStore').value;
-  const turnoFilter = document.getElementById('filterTurno').value;
-  const nombresDias = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
-
   
+  const nombresDias = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+  const TIPOS_TURNO_ORDEN = ['M', 'T', 'MT', 'M2']; // Definimos el orden de las filas
+
   document.getElementById('weekLabel').textContent = formatWeekRange(days[0], days[6]);
 
-  // 1. Filtrar y ORDENAR empleados por el turno que tengan asignado (opcional pero recomendado)
-  let emps = DATA.empleados.filter(e => e.estado === 'activo');
-  if (storeFilter) emps = emps.filter(e => e.tienda === storeFilter);
-  
-  // Definimos el orden de prioridad para que las filas salgan ordenadas por tipo de turno
-  const ORDEN_TURNOS = { 'M': 1, 'M2': 2, 'T': 3, 'MT': 4, 'L': 5 };
+  // 1. Leyenda al principio
+  const leyendaHTML = `
+    <div class="leyenda-cuadrante" style="display:flex; gap:10px; margin-bottom:15px; flex-wrap:wrap; background:#f9f9f9; padding:10px; border-radius:8px; border:1px solid #eee; font-size:11px">
+      <div style="display:flex; align-items:center; gap:5px"><span class="pill pill-m" style="padding:2px 6px">M</span> Mañana</div>
+      <div style="display:flex; align-items:center; gap:5px"><span class="pill pill-t" style="padding:2px 6px">T</span> Tarde</div>
+      <div style="display:flex; align-items:center; gap:5px"><span class="pill pill-mt" style="padding:2px 6px">MT</span> Partido</div>
+      <div style="display:flex; align-items:center; gap:5px"><span class="pill pill-m2" style="padding:2px 6px">M2</span> Mañana 2</div>
+      <div style="display:flex; align-items:center; gap:5px"><span class="pill pill-l" style="padding:2px 6px">-</span> Libranza / Inactivo</div>
+    </div>`;
+
+  // Obtenemos las tiendas directamente de la página de TURNOS
+  const tiendasConTurnos = [...new Set(DATA.turnos
+    .filter(t => days.includes(t.fecha))
+    .map(t => t.tienda))]
+    .filter(Boolean).sort();
 
   const gridCols = `180px repeat(7, 1fr)`;
-  let htmlFinal = ""; 
+  let htmlFinal = leyendaHTML; 
 
-  // Agrupamos por tienda para mantener los encabezados de colores
-  const tiendas = [...new Set(emps.map(e => e.tienda))].sort();
-
-  tiendas.forEach(tienda => {
+  tiendasConTurnos.forEach(tienda => {
+    if (storeFilter && tienda !== storeFilter) return;
     const color = CONFIG.STORE_COLORS[tienda] || '#888';
-    const empsTienda = emps.filter(e => e.tienda === tienda);
-
-    // Ordenamos los empleados de esta tienda: primero los de Mañana, luego M2, etc.
-    // Miramos su turno del primer día de la semana para decidir el orden
-    empsTienda.sort((a, b) => {
-      const turnoA = getTurno(a.id, days[0]) || 'L';
-      const turnoB = getTurno(b.id, days[0]) || 'L';
-      return (ORDEN_TURNOS[turnoA] || 9) - (ORDEN_TURNOS[turnoB] || 9);
-    });
-
-    // Encabezado de la Tienda
+    
+    // Encabezado de la tienda
     htmlFinal += `
       <div style="grid-column:1/-1; background:${color}11; border-left:4px solid ${color}; padding:10px; font-weight:bold; margin-top:15px; display:grid; grid-template-columns:${gridCols}">
         <div style="color:${color}">📍 ${tienda}</div>
         ${nombresDias.map(dia => `<div style="text-align:center; font-size:11px; text-transform:uppercase; color:#666">${dia}</div>`).join('')}
       </div>`;
 
-    // FILA POR CADA EMPLEADO
-    empsTienda.forEach(emp => {
+    // 2. Creamos una fila por cada tipo de turno (Mañana, Tarde, Partido)
+    TIPOS_TURNO_ORDEN.forEach(tipoActual => {
+      const labelTurno = tipoActual === 'M' ? '☀️ Mañana' : tipoActual === 'T' ? '🌙 Tarde' : tipoActual === 'MT' ? '🕒 Partido' : '☀️ Mañana 2';
+      
       const rowTurnos = days.map(d => {
-        const turno = getTurno(emp.id, d);
-        const isHoy = d === hoy;
-        
-        if (!turno || turno === 'L') {
-          return `<div class="cuad-cell ${isHoy ? 'today-col' : ''}"><span class="pill pill-v">-</span></div>`;
+        // Buscamos empleados que tengan este turno específico en esta tienda y fecha
+        // Filtramos para que NO aparezcan VAC (vacaciones) o B (baja)
+        const turnosDia = DATA.turnos.filter(t => 
+          t.tienda === tienda && 
+          t.fecha === d && 
+          t.turno === tipoActual &&
+          t.turno !== 'VAC' && t.turno !== 'B'
+        );
+
+        if (turnosDia.length === 0) {
+          return `<div class="cuad-cell ${d === hoy ? 'today-col' : ''}"><span class="pill pill-l">-</span></div>`;
         }
 
+        // Si hay empleados en este turno, mostramos sus nombres
+        const nombres = turnosDia.map(t => t.nombre.split(' ')[0]).join(', ');
+        
         return `
-          <div class="cuad-cell ${isHoy ? 'today-col' : ''}">
-            <span class="pill pill-${turno.toLowerCase()}">${turno}</span>
+          <div class="cuad-cell ${d === hoy ? 'today-col' : ''}">
+            <span class="pill pill-${tipoActual.toLowerCase()}" style="padding: 2px 8px;">
+              ${nombres}
+            </span>
           </div>`;
       }).join('');
 
       htmlFinal += `
-        <div class="cuad-row" style="grid-template-columns:${gridCols}; border-bottom: 1px solid #eee;">
-          <div class="cuad-emp" style="padding-left:15px; display:flex; align-items:center; gap:8px">
-            <div class="avatar-xs" style="${avatarStyle(emp.nombre)}">${initials(emp.nombre)}</div>
-            <div style="display:flex; flex-direction:column">
-              <span style="font-weight:600; font-size:12px">${emp.nombre.split(' ')[0]}</span>
-              <span style="font-size:10px; color:#999">${emp.puesto || ''}</span>
-            </div>
+        <div class="cuad-row" style="grid-template-columns:${gridCols}">
+          <div class="cuad-emp" style="font-weight:600; font-size:12px; color:#555; padding-left:15px">
+            ${labelTurno}
           </div>
           ${rowTurnos}
         </div>`;
@@ -262,7 +269,7 @@ function renderCuadrante() {
   });
 
   const container = document.getElementById('cuadranteTable');
-  container.innerHTML = htmlFinal || '<div style="padding:20px; text-align:center">No hay datos.</div>';
+  if (container) container.innerHTML = htmlFinal || '<div style="padding:20px; text-align:center">No hay turnos para esta semana.</div>';
 }
 
 // ── EMPLEADOS ──
@@ -352,7 +359,6 @@ function selectStoreDet(tienda) {
 }
 
 function renderStoreDetail(tienda) {
-
   const emps = DATA.empleados.filter(e => e.tienda === tienda);
   const hoy  = toDateStr(new Date());
   const days  = weekDays(getMonday(new Date()));
@@ -561,7 +567,6 @@ function getMonday(d) {
   date.setHours(0, 0, 0, 0);
   return date;
 }
-
 function addDays(d, n) { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
 function weekDays(monday) { return Array.from({length: 7}, (_, i) => toDateStr(addDays(monday, i))); }
 function toDateStr(d) { return d.toISOString().slice(0, 10); }
@@ -602,5 +607,4 @@ function slugify(str) {
   return str.toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-
-  }
+}
