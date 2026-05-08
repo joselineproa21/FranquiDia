@@ -7,39 +7,40 @@
     <link rel="stylesheet" href="style.css">
     <style>
         :root { --primary: #007bff; --bg: #f4f7f6; }
-        body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); margin: 0; padding: 15px; color: #333; }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); margin: 0; padding: 10px; color: #333; }
         .container { max-width: 900px; margin: 0 auto; }
         
         .header-tienda { 
             background: white; padding: 20px; border-radius: 15px; 
-            box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 20px; text-align: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 15px; text-align: center;
         }
-        .header-tienda h1 { margin: 0; font-size: 24px; color: #1a1a1a; }
+        .header-tienda h1 { margin: 0; font-size: 22px; color: #1a1a1a; }
         .week-nav { display: flex; align-items: center; justify-content: center; gap: 15px; margin-top: 15px; }
         
         .nav-btn { 
-            background: #eee; border: none; padding: 8px 15px; border-radius: 8px; 
-            cursor: pointer; font-weight: 600; font-size: 14px; transition: 0.2s;
+            background: #eee; border: none; padding: 10px 18px; border-radius: 10px; 
+            cursor: pointer; font-weight: 600; font-size: 16px; transition: 0.2s;
         }
-        .nav-btn:hover { background: #ddd; }
 
         #cuadranteTable { 
             background: white; border-radius: 15px; overflow: hidden; 
             box-shadow: 0 4px 15px rgba(0,0,0,0.05);
         }
 
-        /* Ajustes para móviles */
         .cuad-row { display: grid; border-bottom: 1px solid #eee; align-items: center; }
         .cuad-cell { padding: 12px 2px; text-align: center; border-left: 1px solid #f9f9f9; }
         .today-col { background: #fff9e6; }
-        .cuad-emp { padding: 10px; font-weight: 600; font-size: 13px; background: #fafafa; }
+        .cuad-emp { padding: 10px; font-weight: 600; font-size: 12px; background: #fafafa; color: #666; }
+        
+        /* Ajuste para que los nombres no se corten en móviles */
+        .pill { font-size: 10px !important; padding: 4px 6px !important; border-radius: 10px; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <div class="header-tienda">
-        <h1 id="storeTitle">Cargando tienda...</h1>
+        <h1 id="storeTitle">Cargando...</h1>
         <div class="week-nav">
             <button class="nav-btn" onclick="changeWeek(-7)">◀</button>
             <span id="weekLabel" style="font-weight: 500; font-size: 14px; color: #666;"></span>
@@ -48,80 +49,70 @@
     </div>
 
     <div id="cuadranteTable">
-        <div style="padding: 40px; text-align: center; color: #999;">Cargando turnos...</div>
+        <div style="padding: 40px; text-align: center; color: #999;">Cargando cuadrante...</div>
     </div>
 </div>
 
 <script src="config.js"></script>
 <script>
-    // --- ESTADO Y CARGA ---
+    // --- ESTADO GLOBAL ---
     let DATA = { turnos: [], empleados: [] };
     const params = new URLSearchParams(window.location.search);
     const activeStore = params.get('tienda');
     let currentWeekStart = params.get('start') ? new Date(params.get('start')) : getMonday(new Date());
 
-    async function init() {
-    if (!activeStore) {
-        document.getElementById('storeTitle').textContent = "Tienda no encontrada";
-        return;
-    }
-
-    // 1. Intentar cargar de la memoria del móvil (caché)
-    const cached = localStorage.getItem('franquidia_data');
-    if (cached) {
-        DATA = JSON.parse(cached);
-        render();
-    }
-
-    // 2. Cargar datos frescos usando una función de ayuda más limpia
-    try {
-        const data = await fetchJSONP(CONFIG.SCRIPT_URL + '?action=getData');
-        DATA = data;
-        localStorage.setItem('franquidia_data', JSON.stringify(data));
-        render();
-    } catch (e) {
-        console.error("Error cargando datos frescos:", e);
-        if (!cached) {
-            document.getElementById('cuadranteTable').innerHTML = 
-                `<div style="padding:40px; text-align:center; color:red;">
-                    Error de conexión. Asegúrate de tener internet.
-                 </div>`;
-        }
-    }
-}
-
-// Añade esta función justo debajo de init()
-function fetchJSONP(url) {
-    return new Promise((resolve, reject) => {
-        const cbName = 'cb_' + Date.now();
-        const script = document.createElement('script');
-        window[cbName] = (data) => {
-            delete window[cbName];
-            document.head.removeChild(script);
-            resolve(data);
-        };
-        script.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cbName;
-        script.onerror = () => reject(new Error('Fallo al cargar script'));
-        document.head.appendChild(script);
-    });
-}
-
-        // 2. Actualizar datos desde el servidor
-        try {
-            const cbName = 'cb_' + Date.now();
+    // --- CARGA DE DATOS (JSONP) ---
+    function fetchJSONP(url) {
+        return new Promise((resolve, reject) => {
+            const cbName = 'cb_' + Date.now() + Math.floor(Math.random() * 1000);
             const script = document.createElement('script');
-            window[cbName] = function(json) {
-                DATA = json;
-                localStorage.setItem('franquidia_data', JSON.stringify(json));
-                render();
+            window[cbName] = (data) => {
                 delete window[cbName];
                 document.head.removeChild(script);
+                resolve(data);
             };
-            script.src = `${CONFIG.SCRIPT_URL}?action=getData&callback=${cbName}`;
+            script.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cbName;
+            script.onerror = () => {
+                delete window[cbName];
+                if(script.parentNode) document.head.removeChild(script);
+                reject(new Error('Error de conexión'));
+            };
             document.head.appendChild(script);
-        } catch(e) { console.error("Error actualizando datos", e); }
+        });
+    }
+
+    async function init() {
+        if (!activeStore) {
+            document.getElementById('storeTitle').textContent = "Tienda no encontrada";
+            return;
+        }
+
+        const cached = localStorage.getItem('franquidia_data');
+        if (cached) {
+            DATA = JSON.parse(cached);
+            render();
+        }
+
+        try {
+            const data = await fetchJSONP(CONFIG.SCRIPT_URL + '?action=getData');
+            DATA = data;
+            localStorage.setItem('franquidia_data', JSON.stringify(data));
+            render();
+        } catch (e) {
+            console.error("Modo offline o error de red");
+        }
     }
 
     // --- RENDERIZADO ---
     function render() {
-        const days = weekDays(currentWeek
+        const days = weekDays(currentWeekStart);
+        const hoy = new Date().toISOString().slice(0, 10);
+        const nombresDias = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+        const gridCols = `90px repeat(7, 1fr)`;
+
+        document.getElementById('storeTitle').textContent = "📍 " + activeStore;
+        document.getElementById('weekLabel').textContent = `Semana del ${days[0].split('-')[2]} al ${days[6].split('-')[2]}`;
+
+        // Leyenda
+        let html = `
+            <div style="display:flex; gap:8px; padding:12px; flex-wrap:wrap; background:#fff; border-bottom:1px
