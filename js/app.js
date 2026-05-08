@@ -189,6 +189,7 @@ function renderCuadrante() {
   const days = weekDays(currentWeekStart);
   const hoy = toDateStr(new Date());
   const storeFilter = document.getElementById('filterStore').value;
+  const nombresDias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 
   document.getElementById('weekLabel').textContent = formatWeekRange(days[0], days[6]);
 
@@ -200,50 +201,65 @@ function renderCuadrante() {
     if (storeFilter && tienda !== storeFilter) return;
     const color = CONFIG.STORE_COLORS[tienda] || '#888';
     
-    let empsTienda = DATA.empleados.filter(e => e.tienda === tienda);
-
-    // Ordenar empleados por turno de hoy
-    empsTienda.sort((a, b) => {
-      const turnoA = DATA.turnos.find(t => t.nombre === a.nombre && t.tienda === a.tienda && t.fecha === hoy)?.turno || 'L';
-      const turnoB = DATA.turnos.find(t => t.nombre === b.nombre && t.tienda === b.tienda && t.fecha === hoy)?.turno || 'L';
-      const orden = { 'M': 1, 'T': 2, 'L': 3 };
-      return (orden[turnoA] || 99) - (orden[turnoB] || 99);
+    // 1. Filtrar empleados: solo los que tienen turnos reales esta semana (no L ni VAC)
+    let empsTienda = DATA.empleados.filter(e => {
+      if (e.tienda !== tienda) return false;
+      const turnosSemana = DATA.turnos.filter(t => 
+        t.nombre === e.nombre && 
+        t.tienda === e.tienda && 
+        days.includes(t.fecha)
+      );
+      return turnosSemana.some(t => !['L', 'VAC', 'F', 'B'].includes(t.turno));
     });
-    
+
+    if (empsTienda.length === 0) return;
+
+    // 2. Encabezado de tienda con los nombres de los días
     htmlFinal += `
-      <div style="grid-column:1/-1;background:${color}11;border-left:4px solid ${color};padding:8px 12px;font-weight:600;margin-top:10px;font-size:13px">
-        📍 Día — ${tienda}
+      <div style="grid-column:1/-1; background:${color}22; border-left:4px solid ${color}; padding:10px; font-weight:bold; margin-top:15px; display:grid; grid-template-columns:${gridCols}">
+        <div style="color:${color}">📍 ${tienda}</div>
+        ${nombresDias.map(dia => `<div style="text-align:center; font-size:11px; text-transform:uppercase; color:#666">${dia}</div>`).join('')}
       </div>`;
 
     empsTienda.forEach(emp => {
       const primerNombre = emp.nombre.split(' ')[0];
+      
+      // 3. Lógica para la columna "Mañana / Tarde / Partido"
+      const primerTurnoVal = DATA.turnos.find(t => 
+        t.nombre === emp.nombre && 
+        t.tienda === emp.tienda && 
+        days.includes(t.fecha) && 
+        !['L', 'VAC'].includes(t.turno)
+      )?.turno || 'M';
+      
+      const etiquetasTurno = { 'M': 'Mañana', 'T': 'Tarde', 'MT': 'Partido', 'M2': 'Partido' };
+      const tipoTurnoTexto = etiquetasTurno[primerTurnoVal] || 'Mañana';
 
-      // CORRECCIÓN AQUÍ: Un solo mapeo limpio
       const rowTurnos = days.map(d => {
-          const t = DATA.turnos.find(turno => 
-            turno.nombre === emp.nombre && 
-            turno.tienda === emp.tienda && 
-            turno.fecha === d
-          );
-          
-          const val = t ? t.turno : 'L';
-          const isHoy = d === hoy;
-          
-          // Mantenemos tu preferencia: Nombre del empleado si tiene turno, 'L' si libra
-          const textoCelda = (val === 'L') ? 'L' : primerNombre;
+        const t = DATA.turnos.find(turno => 
+          turno.nombre === emp.nombre && 
+          turno.tienda === emp.tienda && 
+          turno.fecha === d
+        );
+        const val = t ? t.turno : 'L';
+        const isHoy = d === hoy;
+        
+        // 4. Si libra o vacaciones, la celda queda más limpia
+        const esInactivo = ['L', 'VAC', 'F', 'B'].includes(val);
+        const textoCelda = esInactivo ? '-' : primerNombre;
 
-          return `<div class="cuad-cell ${isHoy ? 'today-col' : ''}">
-                    <span class="pill pill-${val.toLowerCase()}" style="font-size: 10px; padding: 2px 6px;">
-                      ${textoCelda}
-                    </span>
-                  </div>`;
+        return `
+          <div class="cuad-cell ${isHoy ? 'today-col' : ''}" style="${esInactivo ? 'opacity:0.4' : ''}">
+            <span class="pill pill-${val.toLowerCase()}" style="font-size: 10px; padding: 2px 6px;">
+              ${textoCelda}
+            </span>
+          </div>`;
       }).join('');
 
       htmlFinal += `
         <div class="cuad-row" style="grid-template-columns:${gridCols}">
-          <div class="cuad-emp">
-            <div class="avatar-xs" style="${avatarStyle(emp.nombre)}">${initials(emp.nombre)}</div>
-            <span style="margin-left:8px">${primerNombre}</span>
+          <div class="cuad-emp" style="font-weight:500; font-size:12px; color:#444; padding-left:15px">
+            ${tipoTurnoTexto}
           </div>
           ${rowTurnos}
         </div>`;
