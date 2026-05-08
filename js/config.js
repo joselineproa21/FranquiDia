@@ -10,8 +10,8 @@ const CONFIG = {
 
   // ── PASO 2: URL base de tu GitHub Pages ──
   // Asegúrate de que termine SIN la barra final, el código la añade después
-  BASE_URL: 'https://joselineproa21.github.io/FranquiDia',
-
+BASE_URL: 'https://joselineproa21.github.io/Franquidia',
+  
   // ── Nombre del negocio ──
   NOMBRE_NEGOCIO: 'FranquiDía',
 
