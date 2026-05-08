@@ -434,12 +434,10 @@ function showPublishLinks() {
         
         <div id="publishList">`;
 
-  tiendas.forEach(tienda => {
-    const color = CONFIG.STORE_COLORS[tienda] || '#888';
-    // Link simulado (ajusta CONFIG.BASE_URL si es necesario)
-    // Esto les llevará a la página principal pero con la tienda ya seleccionada
-    const currentUrl = window.location.href.split('?')[0];
-    const linkTienda = `${currentUrl}?store=${encodeURIComponent(tienda)}&start=${days[0]}`;    
+   tiendas.forEach(tienda => {
+      const color = CONFIG.STORE_COLORS[tienda] || '#888';
+      // Link simulado (ajusta CONFIG.BASE_URL si es necesario)
+      const linkTienda = `${CONFIG.BASE_URL || 'https://tu-app.com'}/tienda.html?tienda=${encodeURIComponent(tienda)}&start=${days[0]}`;
     
     html += `
       <div class="publish-card" style="border:1px solid #e0e0e0; border-radius:12px; padding:15px; margin-bottom:20px; background:#fff; box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
