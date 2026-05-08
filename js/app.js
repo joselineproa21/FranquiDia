@@ -189,62 +189,62 @@ function renderCuadrante() {
   const days = weekDays(currentWeekStart);
   const hoy = toDateStr(new Date());
   const storeFilter = document.getElementById('filterStore').value;
-  const nombresDias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+  const nombresDias = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
   document.getElementById('weekLabel').textContent = formatWeekRange(days[0], days[6]);
 
-  const tiendas = [...new Set(DATA.empleados.map(e => e.tienda))].filter(Boolean).sort();
+  // Obtenemos todas las tiendas únicas que aparecen en los TURNOS de esta semana
+  // para asegurar que si alguien cambia de tienda, aparezca en la nueva.
+  const tiendasConTurnos = [...new Set(DATA.turnos
+    .filter(t => days.includes(t.fecha))
+    .map(t => t.tienda))]
+    .filter(Boolean).sort();
+
   const gridCols = `180px repeat(7, 1fr)`;
   let htmlFinal = '';
 
-  tiendas.forEach(tienda => {
+  tiendasConTurnos.forEach(tienda => {
     if (storeFilter && tienda !== storeFilter) return;
     const color = CONFIG.STORE_COLORS[tienda] || '#888';
     
-    // 1. Filtrar empleados: solo los que tienen turnos reales esta semana (no L ni VAC)
-    let empsTienda = DATA.empleados.filter(e => {
-      if (e.tienda !== tienda) return false;
-      const turnosSemana = DATA.turnos.filter(t => 
-        t.nombre === e.nombre && 
-        t.tienda === e.tienda && 
-        days.includes(t.fecha)
-      );
-      return turnosSemana.some(t => !['L', 'VAC', 'F', 'B'].includes(t.turno));
-    });
+    // BUSQUEDA DINÁMICA: Obtenemos los nombres de personas que tienen turnos en ESTA tienda ESTA semana
+    const nombresEnTienda = [...new Set(DATA.turnos
+      .filter(t => t.tienda === tienda && days.includes(t.fecha) && !['L', 'VAC', 'F', 'B'].includes(t.turno))
+      .map(t => t.nombre))];
 
-    if (empsTienda.length === 0) return;
+    if (nombresEnTienda.length === 0) return;
 
-    // 2. Encabezado de tienda con los nombres de los días
+    // Encabezado de tienda
     htmlFinal += `
       <div style="grid-column:1/-1; background:${color}22; border-left:4px solid ${color}; padding:10px; font-weight:bold; margin-top:15px; display:grid; grid-template-columns:${gridCols}">
         <div style="color:${color}">📍 ${tienda}</div>
         ${nombresDias.map(dia => `<div style="text-align:center; font-size:11px; text-transform:uppercase; color:#666">${dia}</div>`).join('')}
       </div>`;
 
-    empsTienda.forEach(emp => {
-      const primerNombre = emp.nombre.split(' ')[0];
+    nombresEnTienda.forEach(nombrePersona => {
+      const primerNombre = nombrePersona.split(' ')[0];
       
-      // 3. Lógica para la columna "Mañana / Tarde / Partido"
-      const primerTurnoVal = DATA.turnos.find(t => 
-        t.nombre === emp.nombre && 
-        t.tienda === emp.tienda && 
+      // Buscamos el tipo de turno para la etiqueta de la izquierda
+      const turnoEjemplo = DATA.turnos.find(t => 
+        t.nombre === nombrePersona && 
+        t.tienda === tienda && 
         days.includes(t.fecha) && 
         !['L', 'VAC'].includes(t.turno)
       )?.turno || 'M';
       
       const etiquetasTurno = { 'M': 'Mañana', 'T': 'Tarde', 'MT': 'Partido', 'M2': 'Partido' };
-      const tipoTurnoTexto = etiquetasTurno[primerTurnoVal] || 'Mañana';
+      const tipoTurnoTexto = etiquetasTurno[turnoEjemplo] || 'Mañana';
 
       const rowTurnos = days.map(d => {
+        // IMPORTANTE: Buscamos el turno específico de esa persona en esa TIENDA y ese DÍA
         const t = DATA.turnos.find(turno => 
-          turno.nombre === emp.nombre && 
-          turno.tienda === emp.tienda && 
+          turno.nombre === nombrePersona && 
+          turno.tienda === tienda && 
           turno.fecha === d
         );
+
         const val = t ? t.turno : 'L';
         const isHoy = d === hoy;
-        
-        // 4. Si libra o vacaciones, la celda queda más limpia
         const esInactivo = ['L', 'VAC', 'F', 'B'].includes(val);
         const textoCelda = esInactivo ? '-' : primerNombre;
 
@@ -258,8 +258,8 @@ function renderCuadrante() {
 
       htmlFinal += `
         <div class="cuad-row" style="grid-template-columns:${gridCols}">
-          <div class="cuad-emp" style="font-weight:500; font-size:12px; color:#444; padding-left:15px">
-            ${tipoTurnoTexto}
+          <div class="cuad-emp" style="font-weight:500; font-size:11px; color:#444; padding-left:15px; line-height:1.2">
+            ${tipoTurnoTexto}<br><small style="color:#999; font-size:9px">${primerNombre}</small>
           </div>
           ${rowTurnos}
         </div>`;
@@ -267,7 +267,7 @@ function renderCuadrante() {
   });
 
   const container = document.getElementById('cuadranteTable');
-  if (container) container.innerHTML = htmlFinal;
+  if (container) container.innerHTML = htmlFinal || '<div style="padding:20px; text-align:center">No hay turnos asignados para esta semana.</div>';
 }
 // ── EMPLEADOS ──
 function renderEmpleados() {
