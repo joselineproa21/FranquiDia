@@ -1,6 +1,4 @@
-// v2.7 — Restauración total y filtro de vacaciones
-// ============================================================
-// FranquiDía — App principal (dashboard admin)
+// v2.8 — Restauración total + Filtro estricto de Vacaciones
 // ============================================================
 
 let DATA = { empleados: [], turnos: [], incidencias: [] };
@@ -26,6 +24,7 @@ function setupNav() {
   document.getElementById('nextWeek').onclick = () => { currentWeekStart = addDays(currentWeekStart, 7); renderCuadrante(); };
   document.getElementById('todayBtn').onclick = () => { currentWeekStart = getMonday(new Date()); renderCuadrante(); };
 
+  // Recuperadas funciones que daban error en consola
   document.getElementById('publishWeek').addEventListener('click', showPublishLinks);
   document.getElementById('searchEmp').addEventListener('input', renderEmpleados);
   document.getElementById('filterEmpStore').addEventListener('change', renderEmpleados);
@@ -69,7 +68,7 @@ function onDataLoaded() {
   if(badge) badge.textContent = `${tiendasCount} tiendas · ${total} empleados`;
 }
 
-// ── Render de Cuadrante (CON FILTRO DE VACACIONES) ──
+// ── Render de Cuadrante (CON TU REGLA DE VACACIONES) ──
 function renderCuadrante() {
   const days = weekDays(currentWeekStart);
   const hoy = toDateStr(new Date());
@@ -90,12 +89,12 @@ function renderCuadrante() {
     if (storeFilter && tienda !== storeFilter) return;
     const color = CONFIG.STORE_COLORS[tienda] || '#888';
     
-    // FILTRO: Solo nombres que tengan algún turno que NO sea 'VAC' en esta semana
+    // REGLA: Filtrar nombres que tengan turnos que NO sean VAC en esta semana
     const nombresUnicos = [...new Set(DATA.turnos
       .filter(t => {
-          const esDeEstaTiendaYSemana = t.tienda === tienda && days.includes(t.fecha);
-          const noEsVacaciones = t.turno !== 'VAC';
-          return esDeEstaTiendaYSemana && noEsVacaciones;
+          const coincide = t.tienda === tienda && days.includes(t.fecha);
+          const noEsVac = t.turno !== 'VAC';
+          return coincide && noEsVac;
       })
       .map(t => t.nombre.trim()))];
 
@@ -176,7 +175,10 @@ function renderResumen() {
   const incAbiertas = (DATA.incidencias || []).filter(i => i.estado !== 'resuelta');
   const horasSemana = calcHorasSemana();
 
-  document.getElementById('resumenMetrics').innerHTML = `
+  const container = document.getElementById('resumenMetrics');
+  if(!container) return;
+
+  container.innerHTML = `
     <div class="metric-card orange">
       <div class="label">Empleados activos</div>
       <div class="value">${DATA.empleados.filter(e => e.estado === 'activo').length}</div>
@@ -194,7 +196,7 @@ function renderResumen() {
     </div>`;
 }
 
-// ── Tiendas e Incidencias ──
+// ── Tiendas ──
 function renderTiendas() {
   const tiendas = [...new Set(DATA.empleados.map(e => e.tienda))].filter(Boolean).sort();
   if (!activeStore && tiendas.length > 0) activeStore = tiendas[0];
@@ -206,7 +208,9 @@ function renderTiendas() {
   }
   renderStoreDetail(activeStore);
 }
+
 function selectStoreDet(t) { activeStore = t; renderTiendas(); }
+
 function renderStoreDetail(tienda) {
   const detail = document.getElementById('storeDetail');
   if(!tienda || !detail) return;
@@ -215,6 +219,7 @@ function renderStoreDetail(tienda) {
     emps.map(e => `<div class="monthly-row"><span>${e.nombre}</span><span class="badge-total">${e.horasContrato}h</span></div>`).join('') + `</div>`;
 }
 
+// ── Incidencias ──
 function renderIncidencias() {
   const container = document.getElementById('incidenciasList');
   if(!container) return;
@@ -223,7 +228,7 @@ function renderIncidencias() {
   `).join('') || 'No hay incidencias';
 }
 
-// ── FUNCIONES DE PUBLICACIÓN (Las que te daban error) ──
+// ── Funciones de Publicación ──
 function showPublishLinks() {
   const days = weekDays(currentWeekStart);
   const range = formatWeekRange(days[0], days[6]);
@@ -255,7 +260,7 @@ function copyToClipboard(tienda, link, range) {
   navigator.clipboard.writeText(txt).then(() => alert("Copiado para " + tienda));
 }
 
-// ── HELPERS ──
+// ── Helpers ──
 function fetchJSONP(url) {
   return new Promise((resolve, reject) => {
     const cbName = 'cb_' + Math.floor(Math.random() * 100000);
