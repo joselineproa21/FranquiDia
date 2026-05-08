@@ -194,7 +194,7 @@ function renderCuadrante() {
   const hoy = toDateStr(new Date());
   const storeFilter = document.getElementById('filterStore').value;
   const nombresDias = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
-  const TIPOS_TURNO_ORDEN = ['M', 'T', 'MT']; // Definimos el orden de las filas
+  const TIPOS_TURNO_ORDEN = ['M', 'T', 'MT', 'M2']; // Definimos el orden de las filas
 
   document.getElementById('weekLabel').textContent = formatWeekRange(days[0], days[6]);
 
@@ -204,6 +204,7 @@ function renderCuadrante() {
       <div style="display:flex; align-items:center; gap:5px"><span class="pill pill-m" style="padding:2px 6px">M</span> Mañana</div>
       <div style="display:flex; align-items:center; gap:5px"><span class="pill pill-t" style="padding:2px 6px">T</span> Tarde</div>
       <div style="display:flex; align-items:center; gap:5px"><span class="pill pill-mt" style="padding:2px 6px">MT</span> Partido</div>
+      <div style="display:flex; align-items:center; gap:5px"><span class="pill pill-m2" style="padding:2px 6px">M2</span> Mañana 2</div>
       <div style="display:flex; align-items:center; gap:5px"><span class="pill pill-l" style="padding:2px 6px">-</span> Libranza / Inactivo</div>
     </div>`;
 
@@ -229,7 +230,7 @@ function renderCuadrante() {
 
     // 2. Creamos una fila por cada tipo de turno (Mañana, Tarde, Partido)
     TIPOS_TURNO_ORDEN.forEach(tipoActual => {
-      const labelTurno = tipoActual === 'M' ? '☀️ Mañana' : tipoActual === 'T' ? '🌙 Tarde' : '🕒 Partido';
+      const labelTurno = tipoActual === 'M' ? '☀️ Mañana' : tipoActual === 'T' ? '🌙 Tarde' : tipoActual === 'MT' ? '🕒 Partido' : '☀️ Mañana 2';
       
       const rowTurnos = days.map(d => {
         // Buscamos empleados que tengan este turno específico en esta tienda y fecha
