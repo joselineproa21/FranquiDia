@@ -233,13 +233,21 @@ function renderEmpleados() {
 
   const rows = emps.map(emp => {
     const storeColor = CONFIG.STORE_COLORS[emp.tienda] || '#888';
+    
+    // CREAMOS EL LINK A LA FICHA
+    const urlFicha = `empleado.html?nombre=${encodeURIComponent(emp.nombre)}&tienda=${encodeURIComponent(emp.tienda)}`;
+
     return `
       <tr>
         <td>${emp.nombre}</td>
         <td><span class="store-tag" style="border-color:${storeColor};color:${storeColor}">${emp.tienda}</span></td>
         <td>${emp.horasContrato || 40}h</td>
         <td><span class="badge ${emp.estado === 'activo' ? 'badge-ok' : 'badge-warn'}">${emp.estado}</span></td>
-        <td><button class="btn-sm" onclick="copyLink('${slugify(emp.nombre)}')">Copiar Link</button></td>
+        <td>
+          <a href="${urlFicha}" class="btn-sm" style="text-decoration:none; display:inline-block; background:#f39c12; color:white;">
+            Ver Ficha
+          </a>
+        </td>
       </tr>`;
   }).join('');
 
@@ -248,7 +256,6 @@ function renderEmpleados() {
     <tbody>${rows || '<tr><td colspan="5">Sin resultados</td></tr>'}</tbody>
   </table>`;
 }
-
 // ── TIENDAS (Daba el error de consola) ──
 function renderTiendas() {
   const tiendas = [...new Set(DATA.empleados.map(e => e.tienda))].filter(Boolean).sort();
