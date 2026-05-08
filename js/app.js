@@ -1,4 +1,4 @@
-// v2.2 — Limpieza total de sintaxis y cierres
+// v2.3 — Eliminado Timeout y Limpieza de Sintaxis
 // ============================================================
 // FranquiDía — App principal (dashboard admin)
 // ============================================================
@@ -42,7 +42,7 @@ function setupNav() {
   document.getElementById('filterTurno').addEventListener('change', renderCuadrante);
 }
 
-// ── Carga de datos optimizada ──
+// ── Carga de datos ──
 async function loadData() {
   const loadingEl = document.getElementById('loadingState');
   const errorEl = document.getElementById('errorState');
@@ -85,13 +85,8 @@ function fetchJSONP(url) {
   return new Promise((resolve, reject) => {
     const cbName = 'cb_' + Date.now();
     const script = document.createElement('script');
-    const timeout = setTimeout(() => {
-      cleanup();
-      reject(new Error('Tiempo de espera agotado'));
-    }, 20000);
 
     function cleanup() {
-      clearTimeout(timeout);
       delete window[cbName];
       if (script.parentNode) script.parentNode.removeChild(script);
     }
@@ -102,7 +97,10 @@ function fetchJSONP(url) {
     };
 
     script.src = url + '&callback=' + cbName;
-    script.onerror = () => { cleanup(); reject(new Error('Error de red')); };
+    script.onerror = () => { 
+      cleanup(); 
+      reject(new Error('Error de red al conectar con Google Sheets')); 
+    };
     document.head.appendChild(script);
   });
 }
@@ -186,172 +184,4 @@ function renderResumen() {
 function renderCuadrante() {
   const days = weekDays(currentWeekStart);
   const hoy = toDateStr(new Date());
-  const storeFilter = document.getElementById('filterStore').value;
-
-  document.getElementById('weekLabel').textContent = formatWeekRange(days[0], days[6]);
-
-  const tiendas = [...new Set(DATA.empleados.map(e => e.tienda))].filter(Boolean).sort();
-  const gridCols = `180px repeat(7, 1fr)`;
-  let htmlFinal = '';
-
-  tiendas.forEach(tienda => {
-    if (storeFilter && tienda !== storeFilter) return;
-    
-    const color = CONFIG.STORE_COLORS[tienda] || '#888';
-    const empsTienda = DATA.empleados.filter(e => e.tienda === tienda);
-    
-    htmlFinal += `
-      <div style="grid-column:1/-1;background:${color}11;border-left:4px solid ${color};padding:8px 12px;font-weight:600;margin-top:10px;font-size:13px">
-        📍 Día — ${tienda}
-      </div>`;
-
-    empsTienda.forEach(emp => {
-      const rowTurnos = days.map(d => {
-          const t = DATA.turnos.find(turno => turno.nombre === emp.nombre && turno.fecha === d);
-          const val = t ? t.turno : 'L';
-          const isHoy = d === hoy;
-          return `<div class="cuad-cell ${isHoy ? 'today-col' : ''}">
-                    <span class="pill pill-${val.toLowerCase()}">${val}</span>
-                  </div>`;
-      }).join('');
-
-      htmlFinal += `
-        <div class="cuad-row" style="grid-template-columns:${gridCols}">
-          <div class="cuad-emp">
-            <div class="avatar-xs" style="${avatarStyle(emp.nombre)}">${initials(emp.nombre)}</div>
-            <span style="margin-left:8px">${emp.nombre.split(' ')[0]}</span>
-          </div>
-          ${rowTurnos}
-        </div>`;
-    });
-  });
-
-  const container = document.getElementById('cuadranteTable');
-  if (container) container.innerHTML = htmlFinal;
-}
-
-// ── EMPLEADOS ──
-function renderEmpleados() {
-  const search = document.getElementById('searchEmp').value.toLowerCase();
-  const store = document.getElementById('filterEmpStore').value;
-
-  let emps = DATA.empleados;
-  if (search) emps = emps.filter(e => e.nombre.toLowerCase().includes(search));
-  if (store) emps = emps.filter(e => e.tienda === store);
-
-  const rows = emps.map(emp => {
-    const horas = calcHorasMes(emp.id);
-    const contrato = parseInt(emp.horasContrato) || 160;
-    const pct = Math.min(100, Math.round((horas / contrato) * 100));
-    const storeColor = CONFIG.STORE_COLORS[emp.tienda] || '#888';
-    
-    return `
-      <tr>
-        <td>
-          <div class="emp-name-cell">
-            <div class="avatar-sm" style="${avatarStyle(emp.nombre)}">${initials(emp.nombre)}</div>
-            ${emp.nombre}
-          </div>
-        </td>
-        <td><span class="store-tag" style="border-color:${storeColor};color:${storeColor}">${emp.tienda}</span></td>
-        <td>${emp.horasContrato || 40}h/sem</td>
-        <td>
-          <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
-        </td>
-        <td><span class="badge ${emp.estado === 'activo' ? 'badge-ok' : 'badge-warn'}">${emp.estado}</span></td>
-        <td><button class="btn-sm" onclick="copyLink('${slugify(emp.nombre)}')">Link</button></td>
-      </tr>`;
-  }).join('');
-
-  document.getElementById('empTable').innerHTML = `<table>
-    <thead><tr><th>Empleado</th><th>Tienda</th><th>Contrato</th><th>Carga Mes</th><th>Estado</th><th>Acción</th></tr></thead>
-    <tbody>${rows || '<tr><td colspan="6">No hay resultados</td></tr>'}</tbody>
-  </table>`;
-}
-
-// ── OTRAS FUNCIONES ──
-function renderTiendas() {
-  const tiendas = [...new Set(DATA.empleados.map(e => e.tienda))].filter(Boolean);
-  if (!activeStore) activeStore = tiendas[0];
-  document.getElementById('storeTabs').innerHTML = tiendas.map(t => `
-    <button class="store-tab ${t === activeStore ? 'active' : ''}" onclick="selectStoreDet('${t}')">${t}</button>
-  `).join('');
-  renderStoreDetail(activeStore);
-}
-
-function selectStoreDet(t) { activeStore = t; renderTiendas(); }
-
-function renderStoreDetail(tienda) {
-  const emps = DATA.empleados.filter(e => e.tienda === tienda);
-  const html = emps.map(e => `<div class="monthly-row">
-    <div class="avatar-xs" style="${avatarStyle(e.nombre)}">${initials(e.nombre)}</div>
-    <span>${e.nombre}</span>
-  </div>`).join('');
-  document.getElementById('storeDetail').innerHTML = `<div class="panel"><div class="panel-title">Equipo ${tienda}</div>${html}</div>`;
-}
-
-function renderIncidencias() {
-  const incs = DATA.incidencias || [];
-  const html = incs.map(i => `
-    <div class="incidencia-item">
-      <div class="inc-body">
-        <strong>${i.tipo.toUpperCase()}: ${i.titulo || 'Nota'}</strong>
-        <div class="inc-detail">${i.detalle || ''}</div>
-      </div>
-      <span class="badge ${i.urgencia === 'urgente' ? 'badge-danger' : 'badge-info'}">${i.estado}</span>
-    </div>`).join('');
-  document.getElementById('incidenciasList').innerHTML = html || 'Sin incidencias';
-}
-
-function populateStoreFilters() {
-  const tiendas = [...new Set(DATA.empleados.map(e => e.tienda))].filter(Boolean).sort();
-  ['filterStore', 'filterEmpStore'].forEach(id => {
-    const sel = document.getElementById(id);
-    if (sel) {
-      sel.innerHTML = '<option value="">Todas las tiendas</option>' + 
-        tiendas.map(t => `<option value="${t}">${t}</option>`).join('');
-    }
-  });
-}
-
-// ── HELPERS ──
-function calcHorasMes(empId) {
-  const emp = DATA.empleados.find(e => e.id === empId);
-  if (!emp) return 0;
-  const mesActual = new Date().getMonth();
-  return DATA.turnos
-    .filter(t => t.nombre === emp.nombre && new Date(t.fecha).getMonth() === mesActual)
-    .reduce((acc, t) => acc + (CONFIG.HORAS_TURNO[t.turno] || 0), 0);
-}
-
-function calcHorasSemana() {
-  const days = weekDays(currentWeekStart);
-  return DATA.turnos
-    .filter(t => days.includes(t.fecha))
-    .reduce((acc, t) => acc + (CONFIG.HORAS_TURNO[t.turno] || 0), 0);
-}
-
-function getMonday(d) {
-  const date = new Date(d);
-  const day = date.getDay();
-  const diff = date.getDate() - day + (day === 0 ? -6 : 1);
-  date.setDate(diff);
-  date.setHours(0,0,0,0);
-  return date;
-}
-
-function addDays(d, n) { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
-function weekDays(monday) { return Array.from({length: 7}, (_, i) => toDateStr(addDays(monday, i))); }
-function toDateStr(d) { return d.toISOString().slice(0, 10); }
-function formatTime(d) { return d.toLocaleTimeString('es-ES', {hour: '2-digit', minute: '2-digit'}); }
-function formatWeekRange(d1, d2) { return `Del ${d1.split('-')[2]} al ${d2.split('-')[2]} de ${new Date(d2).toLocaleString('es-ES', {month: 'long'})}`; }
-function initials(n) { return n ? n.split(' ').map(p => p[0]).join('').toUpperCase() : '??'; }
-function avatarStyle(n) { 
-  const colors = [['#FFF3E8','#C0620E'], ['#E6F1FB','#185FA5'], ['#EAF3DE','#3B6D11']];
-  const c = colors[n ? n.length % colors.length : 0];
-  return `background:${c[0]};color:${c[1]}`;
-}
-function slugify(s) { return s ? s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-') : ''; }
-
-function showPublishLinks() { alert("Links generados en consola."); }
-function copyLink(s) { navigator.clipboard.writeText(`${CONFIG.BASE_URL}/empleado.html?emp=${s}`); alert("Copiado"); }
+  const storeFilter = document.
