@@ -268,6 +268,7 @@ body {
 
 .pill      { font-size: 10px; font-weight: 500; padding: 2px 6px; border-radius: 4px; width: 100%; text-align: center; display: inline-block; }
 .pill-m    { background: #FFF3E8; color: #854F0B; }
+.pill-m2   { background: #FCE7F3; color: #9D174D; }
 .pill-t    { background: #E6F1FB; color: #0C447C; }
 .pill-l    { background: #EAF3DE; color: #27500A; }
 .pill-v    { background: var(--surface2); color: var(--text3); }
