@@ -173,6 +173,7 @@ function renderCuadrante() {
   const hoy = toDateStr(new Date());
   const storeFilter = document.getElementById('filterStore').value;
   const nombresDias = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+  const TIPOS_TURNO = ['M', 'T', 'MT']; // Mañana, Tarde, Partido
 
   document.getElementById('weekLabel').textContent = formatWeekRange(days[0], days[6]);
 
@@ -184,42 +185,61 @@ function renderCuadrante() {
   const gridCols = `180px repeat(7, 1fr)`;
   let htmlFinal = ""; 
 
+  // LEYENDA AL PRINCIPIO
+  htmlFinal += `
+    <div class="panel" style="margin-bottom:15px; display:flex; gap:10px; font-size:12px;">
+      <span class="pill pill-m">M: Mañana</span>
+      <span class="pill pill-t">T: Tarde</span>
+      <span class="pill pill-mt">MT: Partido</span>
+      <span class="pill pill-l">- : Libre</span>
+    </div>`;
+
   tiendasConTurnos.forEach(tienda => {
     if (storeFilter && tienda !== storeFilter) return;
     const color = CONFIG.STORE_COLORS[tienda] || '#888';
     
-    const nombresUnicos = [...new Set(DATA.turnos
-      .filter(t => t.tienda === tienda && days.includes(t.fecha))
-      .map(t => t.nombre))];
-
-    if (nombresUnicos.length === 0) return;
-
+    // Encabezado de la tienda
     htmlFinal += `
       <div style="grid-column:1/-1; background:${color}11; border-left:4px solid ${color}; padding:10px; font-weight:bold; margin-top:15px; display:grid; grid-template-columns:${gridCols}">
         <div style="color:${color}">📍 ${tienda}</div>
         ${nombresDias.map(dia => `<div style="text-align:center; font-size:11px; color:#666">${dia}</div>`).join('')}
       </div>`;
 
-    nombresUnicos.forEach(nombre => {
-      const pNombre = nombre.split(' ')[0];
+    // Renderizamos por tipo de turno (Mañana, Tarde, Partido)
+    TIPOS_TURNO.forEach(tipo => {
+      const labelTurno = tipo === 'M' ? '☀️ Mañana' : tipo === 'T' ? '🌙 Tarde' : '🕒 Partido';
+      
       const rowTurnos = days.map(d => {
-        const t = DATA.turnos.find(turno => turno.nombre === nombre && turno.tienda === tienda && turno.fecha === d);
-        const val = t ? t.turno : 'L';
+        // Buscamos empleados para este tipo de turno en este día, excluyendo VAC y B
+        const turnosDia = DATA.turnos.filter(t => 
+          t.tienda === tienda && 
+          t.fecha === d && 
+          t.turno === tipo &&
+          t.turno !== 'VAC' && 
+          t.turno !== 'B'
+        );
+
+        if (turnosDia.length === 0) {
+          return `<div class="cuad-cell ${d === hoy ? 'today-col' : ''}"><span class="pill pill-l">-</span></div>`;
+        }
+
+        // Si hay empleados, ponemos sus nombres
+        const nombres = turnosDia.map(t => t.nombre.split(' ')[0]).join(', ');
         return `
           <div class="cuad-cell ${d === hoy ? 'today-col' : ''}">
-            <span class="pill pill-${val.toLowerCase()}">${['L', 'VAC', 'F', 'B'].includes(val) ? '-' : pNombre}</span>
+            <span class="pill pill-${tipo.toLowerCase()}">${nombres}</span>
           </div>`;
       }).join('');
 
       htmlFinal += `
         <div class="cuad-row" style="grid-template-columns:${gridCols}">
-          <div class="cuad-emp" style="padding-left:15px">${nombre}</div>
+          <div class="cuad-emp" style="padding-left:15px; font-weight:500; color:#444">${labelTurno}</div>
           ${rowTurnos}
         </div>`;
     });
   });
 
-  document.getElementById('cuadranteTable').innerHTML = htmlFinal || '<div style="padding:20px;">No hay turnos.</div>';
+  document.getElementById('cuadranteTable').innerHTML = htmlFinal || '<div style="padding:20px;">No hay turnos registrados.</div>';
 }
 
 // ── EMPLEADOS ──
