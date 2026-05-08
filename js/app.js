@@ -273,66 +273,85 @@ function renderCuadrante() {
 }
 
 // ── EMPLEADOS ──
-function renderEmpleados() {
-  const search = document.getElementById('searchEmp').value.toLowerCase();
-  const store  = document.getElementById('filterEmpStore').value;
+function renderCuadrante() {
+  const days = weekDays(currentWeekStart);
+  const hoy = toDateStr(new Date());
+  const storeFilter = document.getElementById('filterStore').value;
+  const nombresDias = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+  const TIPOS_TURNO_ORDEN = ['M', 'T', 'MT']; // Definimos el orden de las filas
 
-  let emps = DATA.empleados;
-  if (search) emps = emps.filter(e => e.nombre.toLowerCase().includes(search));
-  if (store)  emps = emps.filter(e => e.tienda === store);
+  document.getElementById('weekLabel').textContent = formatWeekRange(days[0], days[6]);
 
-  document.getElementById('empCount').textContent = emps.length + ' empleados' + (store ? ' en ' + store : '');
-
-  const rows = emps.map(emp => {
-    const horas = calcHorasMes(emp.nombre);
-    const contrato = parseInt(emp.horasContrato) || 160;
-    const pct = Math.min(100, Math.round((horas / contrato) * 100));
-    const vacUsadas = calcVacUsadas(emp.id);
-    const stateClass = { activo: 'badge-ok', vacaciones: 'badge-info', baja: 'badge-warn' }[emp.estado] || 'badge-info';
-    const stateLabel = { activo: 'Activo/a', vacaciones: 'Vacaciones', baja: 'Baja médica' }[emp.estado] || emp.estado;
-    const storeColor = CONFIG.STORE_COLORS[emp.tienda] || '#888';
-    const linkSlug = slugify(emp.nombre);
-    const exceso = Math.max(0, horas - contrato);
-    const extrasHtml = exceso > 0
-      ? `<strong style="color:#E24B4A">+${exceso}h</strong>`
-      : `<span style="color:var(--text3)">0h</span>`;
-    return `
-      <tr>
-        <td>
-          <div class="emp-name-cell">
-            <div class="avatar-sm" style="${avatarStyle(emp.nombre)}">${initials(emp.nombre)}</div>
-            ${emp.nombre}
-          </div>
-        </td>
-        <td><span class="store-tag" style="border-color:${storeColor};color:${storeColor}">${emp.tienda}</span></td>
-        <td>
-          <div>${emp.puesto || '—'}</div>
-          <div style="font-size:11px;color:var(--text3)">${emp.horasContrato || 40}h/sem</div>
-        </td>
-        <td>
-          <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
-          <span style="font-size:11px;color:var(--text2);margin-left:4px">${vacUsadas}/30 días</span>
-        </td>
-        <td>${extrasHtml}</td>
-        <td><span class="badge ${stateClass}">${stateLabel}</span></td>
-        <td>
-          <button class="btn-sm" onclick="copyLink('${linkSlug}')" title="Copiar link del empleado">Link</button>
-        </td>
-      </tr>`;
-  }).join('');
-
-  document.getElementById('empTable').innerHTML = `
-    <div class="emp-table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Empleado</th><th>Tienda</th><th>Contrato</th>
-            <th>Vacaciones</th><th>H. extra</th><th>Estado</th><th></th>
-          </tr>
-        </thead>
-        <tbody>${rows || '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3)">Sin resultados</td></tr>'}</tbody>
-      </table>
+  // 1. Leyenda al principio
+  const leyendaHTML = `
+    <div class="leyenda-cuadrante" style="display:flex; gap:10px; margin-bottom:15px; flex-wrap:wrap; background:#f9f9f9; padding:10px; border-radius:8px; border:1px solid #eee; font-size:11px">
+      <div style="display:flex; align-items:center; gap:5px"><span class="pill pill-m" style="padding:2px 6px">M</span> Mañana</div>
+      <div style="display:flex; align-items:center; gap:5px"><span class="pill pill-t" style="padding:2px 6px">T</span> Tarde</div>
+      <div style="display:flex; align-items:center; gap:5px"><span class="pill pill-mt" style="padding:2px 6px">MT</span> Partido</div>
+      <div style="display:flex; align-items:center; gap:5px"><span class="pill pill-l" style="padding:2px 6px">-</span> Libranza / Inactivo</div>
     </div>`;
+
+  // Obtenemos las tiendas directamente de la página de TURNOS
+  const tiendasConTurnos = [...new Set(DATA.turnos
+    .filter(t => days.includes(t.fecha))
+    .map(t => t.tienda))]
+    .filter(Boolean).sort();
+
+  const gridCols = `180px repeat(7, 1fr)`;
+  let htmlFinal = leyendaHTML; 
+
+  tiendasConTurnos.forEach(tienda => {
+    if (storeFilter && tienda !== storeFilter) return;
+    const color = CONFIG.STORE_COLORS[tienda] || '#888';
+    
+    // Encabezado de la tienda
+    htmlFinal += `
+      <div style="grid-column:1/-1; background:${color}11; border-left:4px solid ${color}; padding:10px; font-weight:bold; margin-top:15px; display:grid; grid-template-columns:${gridCols}">
+        <div style="color:${color}">📍 ${tienda}</div>
+        ${nombresDias.map(dia => `<div style="text-align:center; font-size:11px; text-transform:uppercase; color:#666">${dia}</div>`).join('')}
+      </div>`;
+
+    // 2. Creamos una fila por cada tipo de turno (Mañana, Tarde, Partido)
+    TIPOS_TURNO_ORDEN.forEach(tipoActual => {
+      const labelTurno = tipoActual === 'M' ? '☀️ Mañana' : tipoActual === 'T' ? '🌙 Tarde' : '🕒 Partido';
+      
+      const rowTurnos = days.map(d => {
+        // Buscamos empleados que tengan este turno específico en esta tienda y fecha
+        // Filtramos para que NO aparezcan VAC (vacaciones) o B (baja)
+        const turnosDia = DATA.turnos.filter(t => 
+          t.tienda === tienda && 
+          t.fecha === d && 
+          t.turno === tipoActual &&
+          t.turno !== 'VAC' && t.turno !== 'B'
+        );
+
+        if (turnosDia.length === 0) {
+          return `<div class="cuad-cell ${d === hoy ? 'today-col' : ''}"><span class="pill pill-l">-</span></div>`;
+        }
+
+        // Si hay empleados en este turno, mostramos sus nombres
+        const nombres = turnosDia.map(t => t.nombre.split(' ')[0]).join(', ');
+        
+        return `
+          <div class="cuad-cell ${d === hoy ? 'today-col' : ''}">
+            <span class="pill pill-${tipoActual.toLowerCase()}" style="padding: 2px 8px;">
+              ${nombres}
+            </span>
+          </div>`;
+      }).join('');
+
+      htmlFinal += `
+        <div class="cuad-row" style="grid-template-columns:${gridCols}">
+          <div class="cuad-emp" style="font-weight:600; font-size:12px; color:#555; padding-left:15px">
+            ${labelTurno}
+          </div>
+          ${rowTurnos}
+        </div>`;
+    });
+  });
+
+  const container = document.getElementById('cuadranteTable');
+  if (container) container.innerHTML = htmlFinal || '<div style="padding:20px; text-align:center">No hay turnos para esta semana.</div>';
 }
 
 // ── TIENDAS ──
