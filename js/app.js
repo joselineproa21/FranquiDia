@@ -200,17 +200,12 @@ function renderCuadrante() {
     if (storeFilter && tienda !== storeFilter) return;
     const color = CONFIG.STORE_COLORS[tienda] || '#888';
     
-    // 1. Obtener empleados de la tienda
     let empsTienda = DATA.empleados.filter(e => e.tienda === tienda);
-    // 1.1 Obtener el día de hoy en formato string
-    const hoy = toDateStr(new Date());
 
-    // 2. Ordenar basándose en el turno de este momento
+    // Ordenar empleados por turno de hoy
     empsTienda.sort((a, b) => {
-      // Buscamos el turno de 'a' y 'b' para la fecha de hoy
-      const turnoA = DATA.turnos.find(t => t.nombre === a.nombre && t.fecha === hoy)?.turno || 'L';
-      const turnoB = DATA.turnos.find(t => t.nombre === b.nombre && t.fecha === hoy)?.turno || 'L';
-      
+      const turnoA = DATA.turnos.find(t => t.nombre === a.nombre && t.tienda === a.tienda && t.fecha === hoy)?.turno || 'L';
+      const turnoB = DATA.turnos.find(t => t.nombre === b.nombre && t.tienda === b.tienda && t.fecha === hoy)?.turno || 'L';
       const orden = { 'M': 1, 'T': 2, 'L': 3 };
       return (orden[turnoA] || 99) - (orden[turnoB] || 99);
     });
@@ -221,15 +216,20 @@ function renderCuadrante() {
       </div>`;
 
     empsTienda.forEach(emp => {
-      const primerNombre = emp.nombre.split(' ')[0]; // Nombre corto para las celdas
+      const primerNombre = emp.nombre.split(' ')[0];
 
+      // CORRECCIÓN AQUÍ: Un solo mapeo limpio
       const rowTurnos = days.map(d => {
-          const t = DATA.turnos.find(turno => turno.nombre === emp.nombre && turno.fecha === d);
+          const t = DATA.turnos.find(turno => 
+            turno.nombre === emp.nombre && 
+            turno.tienda === emp.tienda && 
+            turno.fecha === d
+          );
+          
           const val = t ? t.turno : 'L';
           const isHoy = d === hoy;
           
-          // Cambiamos el contenido de la pill: 
-          // Si es 'L' (Libranza) se queda como 'L', si tiene turno aparece su NOMBRE
+          // Mantenemos tu preferencia: Nombre del empleado si tiene turno, 'L' si libra
           const textoCelda = (val === 'L') ? 'L' : primerNombre;
 
           return `<div class="cuad-cell ${isHoy ? 'today-col' : ''}">
