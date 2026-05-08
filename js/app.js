@@ -1,4 +1,4 @@
-// v2.4 — Eliminado Timeout y optimización de fetchJSONP
+// v2.5 — Corrección de nombres y optimización de rutas
 // ============================================================
 // FranquiDía — App principal (dashboard admin)
 // ============================================================
@@ -43,10 +43,33 @@ function setupNav() {
   document.getElementById('searchEmp').addEventListener('input', renderEmpleados);
   document.getElementById('filterEmpStore').addEventListener('change', renderEmpleados);
   document.getElementById('filterStore').addEventListener('change', renderCuadrante);
-  document.getElementById('filterTurno').addEventListener('change', renderCuadrante);
+  
+  const filterTurno = document.getElementById('filterTurno');
+  if(filterTurno) filterTurno.addEventListener('change', renderCuadrante);
 }
 
-// ── Carga de datos ──
+// ── Carga de datos (JSONP) ──
+function fetchJSONP(url) {
+  return new Promise((resolve, reject) => {
+    const cbName = 'cb_' + Date.now() + Math.floor(Math.random() * 1000);
+    const script = document.createElement('script');
+
+    window[cbName] = function(data) {
+      delete window[cbName];
+      if (script.parentNode) script.parentNode.removeChild(script);
+      resolve(data);
+    };
+
+    script.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cbName;
+    script.onerror = () => { 
+      delete window[cbName];
+      if (script.parentNode) script.parentNode.removeChild(script);
+      reject(new Error('Error de red al cargar datos')); 
+    };
+    document.head.appendChild(script);
+  });
+}
+
 async function loadData() {
   const loadingEl = document.getElementById('loadingState');
   const errorEl = document.getElementById('errorState');
@@ -61,52 +84,22 @@ async function loadData() {
     try {
       DATA = JSON.parse(cached);
       onDataLoaded();
-      document.getElementById('syncStatus').textContent = 'Actualizando...';
     } catch(e) { console.error("Error en caché", e); }
   }
 
   try {
     const data = await fetchJSONP(CONFIG.SCRIPT_URL + '?action=getData');
-    if (data.error) throw new Error(data.error);
-    
     DATA = data;
     localStorage.setItem('franquidia_data', JSON.stringify(data));
     onDataLoaded();
   } catch (e) {
     console.error("Error fetch:", e);
-    loadingEl.style.display = 'none';
     if (!cached) {
+      loadingEl.style.display = 'none';
       errorEl.style.display = 'flex';
       document.getElementById('errorMsg').textContent = 'Error de conexión: ' + e.message;
-    } else {
-      mainEl.style.display = 'block';
-      document.getElementById('syncStatus').textContent = 'Modo Offline · ' + formatTime(new Date());
     }
   }
-}
-
-function fetchJSONP(url) {
-  return new Promise((resolve, reject) => {
-    const cbName = 'cb_' + Date.now();
-    const script = document.createElement('script');
-
-    function cleanup() {
-      delete window[cbName];
-      if (script.parentNode) script.parentNode.removeChild(script);
-    }
-
-    window[cbName] = function(data) {
-      cleanup();
-      resolve(data);
-    };
-
-    script.src = url + '&callback=' + cbName;
-    script.onerror = () => { 
-      cleanup(); 
-      reject(new Error('Error de red al cargar datos')); 
-    };
-    document.head.appendChild(script);
-  });
 }
 
 function onDataLoaded() {
@@ -118,21 +111,20 @@ function onDataLoaded() {
   renderResumen();
   renderCuadrante();
   renderEmpleados();
-  renderTiendas();
+  renderTiendas(); // Esta es la función que daba el error en consola
   renderIncidencias();
 
   const total = DATA.empleados.length;
   const tiendasCount = [...new Set(DATA.empleados.map(e => e.tienda))].filter(Boolean).length;
-  document.getElementById('headerBadge').textContent = `${tiendasCount} tiendas · ${total} empleados`;
+  const badge = document.getElementById('headerBadge');
+  if(badge) badge.textContent = `${tiendasCount} tiendas · ${total} empleados`;
 }
 
 // ── RESUMEN ──
 function renderResumen() {
   const hoy = toDateStr(new Date());
   const turnosHoy = DATA.turnos.filter(t => t.fecha === hoy);
-  const extrasAbiertos = DATA.incidencias.filter(i => i.tipo === 'extra' && i.estado !== 'resuelta');
-  const vacActivos = DATA.incidencias.filter(i => (i.tipo === 'vacaciones' || i.tipo === 'baja') && i.estado === 'activa');
-  const incAbiertas = DATA.incidencias.filter(i => i.estado === 'abierta' || i.estado === 'pendiente');
+  const incAbiertas = (DATA.incidencias || []).filter(i => i.estado !== 'resuelta');
   const horasSemana = calcHorasSemana();
 
   document.getElementById('resumenMetrics').innerHTML = `
@@ -144,37 +136,28 @@ function renderResumen() {
     <div class="metric-card">
       <div class="label">Horas esta semana</div>
       <div class="value">${horasSemana}</div>
-      <div class="sub">${extrasAbiertos.length} extras pendientes</div>
-    </div>
-    <div class="metric-card">
-      <div class="label">Vacaciones/Baja</div>
-      <div class="value">${vacActivos.length}</div>
-      <div class="sub">Personal fuera hoy</div>
+      <div class="sub">Carga total</div>
     </div>
     <div class="metric-card">
       <div class="label">Incidencias</div>
       <div class="value">${incAbiertas.length}</div>
-      <div class="sub">${incAbiertas.filter(i => i.urgencia === 'urgente').length} urgentes</div>
+      <div class="sub">Pendientes de revisar</div>
     </div>
   `;
 
   const tiendasList = [...new Set(DATA.empleados.map(e => e.tienda))].filter(Boolean);
   document.getElementById('storesGrid').innerHTML = tiendasList.map(tienda => {
-    const emps = DATA.empleados.filter(e => e.tienda === tienda);
-    const turnosT = turnosHoy.filter(t => emps.some(e => e.nombre === t.nombre));
+    const color = CONFIG.STORE_COLORS[tienda] || '#888';
+    const empsTienda = DATA.empleados.filter(e => e.tienda === tienda);
+    const turnosT = turnosHoy.filter(t => t.tienda === tienda);
     const mañana = turnosT.filter(t => t.turno === 'M').length;
     const tarde = turnosT.filter(t => t.turno === 'T').length;
-    const bajas = DATA.incidencias.filter(i => i.tienda === tienda && i.tipo === 'baja' && i.estado === 'activa').length;
-    const color = CONFIG.STORE_COLORS[tienda] || '#888';
     
     return `
       <div class="store-card">
         <div class="store-header">
           <div class="store-dot" style="background:${color}"></div>
-          <div style="flex:1">
-            <div class="store-name">${tienda}</div>
-          </div>
-          ${bajas > 0 ? `<span class="badge badge-warn">${bajas} Baja</span>` : `<span class="badge badge-ok">OK</span>`}
+          <div class="store-name">${tienda}</div>
         </div>
         <div class="store-shifts">
           <div class="shift-pill shift-m">☀ M: ${mañana}</div>
@@ -184,7 +167,7 @@ function renderResumen() {
   }).join('');
 }
 
-// ── CUADRANTE ACTUALIZADO ──
+// ── CUADRANTE ──
 function renderCuadrante() {
   const days = weekDays(currentWeekStart);
   const hoy = toDateStr(new Date());
@@ -193,103 +176,52 @@ function renderCuadrante() {
 
   document.getElementById('weekLabel').textContent = formatWeekRange(days[0], days[6]);
 
-  // 1. Leyenda en la parte superior
-  const leyendaHTML = `
-    <div class="leyenda-cuadrante" style="display:flex; gap:10px; margin-bottom:15px; flex-wrap:wrap; background:#f9f9f9; padding:10px; border-radius:8px; border:1px solid #eee; font-size:11px">
-      <div style="display:flex; align-items:center; gap:5px"><span class="pill pill-m" style="padding:2px 6px">M</span> Mañana</div>
-      <div style="display:flex; align-items:center; gap:5px"><span class="pill pill-t" style="padding:2px 6px">T</span> Tarde</div>
-      <div style="display:flex; align-items:center; gap:5px"><span class="pill pill-mt" style="padding:2px 6px">MT</span> Partido</div>
-      <div style="display:flex; align-items:center; gap:5px"><span class="pill pill-vac" style="padding:2px 6px">VAC</span> Vacaciones</div>
-      <div style="display:flex; align-items:center; gap:5px"><span class="pill pill-l" style="padding:2px 6px">L</span> Libranza</div>
-    </div>`;
-
   const tiendasConTurnos = [...new Set(DATA.turnos
     .filter(t => days.includes(t.fecha))
     .map(t => t.tienda))]
     .filter(Boolean).sort();
 
   const gridCols = `180px repeat(7, 1fr)`;
-  let htmlFinal = leyendaHTML; 
+  let htmlFinal = ""; 
 
   tiendasConTurnos.forEach(tienda => {
     if (storeFilter && tienda !== storeFilter) return;
     const color = CONFIG.STORE_COLORS[tienda] || '#888';
     
-    let personasData = [];
     const nombresUnicos = [...new Set(DATA.turnos
-      .filter(t => t.tienda === tienda && days.includes(t.fecha) && !['L', 'VAC', 'F', 'B'].includes(t.turno))
+      .filter(t => t.tienda === tienda && days.includes(t.fecha))
       .map(t => t.nombre))];
 
-    nombresUnicos.forEach(nombre => {
-      // Analizamos todos los turnos de la semana para este empleado
-      const turnosSemana = DATA.turnos.filter(t => 
-        t.nombre === nombre && t.tienda === tienda && days.includes(t.fecha)
-      );
-
-      // Calculamos la prioridad: si tiene alguna 'M', va al grupo 1. Si no, si tiene 'T', al grupo 2.
-      let prioridad = 3; // Por defecto partido/otros
-      let etiquetaPrincipal = 'Partido';
-
-      if (turnosSemana.some(t => t.turno === 'M')) {
-        prioridad = 1;
-        etiquetaPrincipal = 'Mañana';
-      } else if (turnosSemana.some(t => t.turno === 'T')) {
-        prioridad = 2;
-        etiquetaPrincipal = 'Tarde';
-      }
-
-      personasData.push({
-        nombre: nombre,
-        tipoTurno: etiquetaPrincipal,
-        prioridad: prioridad
-      });
-    });
-
-    // ORDENACIÓN: Esto hace que los bloques de "Mañana" salgan arriba de los de "Tarde"
-    personasData.sort((a, b) => a.prioridad - b.prioridad);
-
-    if (personasData.length === 0) return;
+    if (nombresUnicos.length === 0) return;
 
     htmlFinal += `
-      <div style="grid-column:1/-1; background:${color}22; border-left:4px solid ${color}; padding:10px; font-weight:bold; margin-top:15px; display:grid; grid-template-columns:${gridCols}">
+      <div style="grid-column:1/-1; background:${color}11; border-left:4px solid ${color}; padding:10px; font-weight:bold; margin-top:15px; display:grid; grid-template-columns:${gridCols}">
         <div style="color:${color}">📍 ${tienda}</div>
-        ${nombresDias.map(dia => `<div style="text-align:center; font-size:11px; text-transform:uppercase; color:#666">${dia}</div>`).join('')}
+        ${nombresDias.map(dia => `<div style="text-align:center; font-size:11px; color:#666">${dia}</div>`).join('')}
       </div>`;
 
-    personasData.forEach(p => {
-      const primerNombre = p.nombre.split(' ')[0];
-
+    nombresUnicos.forEach(nombre => {
+      const pNombre = nombre.split(' ')[0];
       const rowTurnos = days.map(d => {
-        const t = DATA.turnos.find(turno => 
-          turno.nombre === p.nombre && turno.tienda === tienda && turno.fecha === d
-        );
-
+        const t = DATA.turnos.find(turno => turno.nombre === nombre && turno.tienda === tienda && turno.fecha === d);
         const val = t ? t.turno : 'L';
-        const isHoy = d === hoy;
-        const esInactivo = ['L', 'VAC', 'F', 'B'].includes(val);
-        const textoCelda = esInactivo ? '-' : primerNombre;
-
         return `
-          <div class="cuad-cell ${isHoy ? 'today-col' : ''}" style="${esInactivo ? 'opacity:0.4' : ''}">
-            <span class="pill pill-${val.toLowerCase()}" style="font-size: 10px; padding: 2px 6px;">
-              ${textoCelda}
-            </span>
+          <div class="cuad-cell ${d === hoy ? 'today-col' : ''}">
+            <span class="pill pill-${val.toLowerCase()}">${['L', 'VAC', 'F', 'B'].includes(val) ? '-' : pNombre}</span>
           </div>`;
       }).join('');
 
       htmlFinal += `
         <div class="cuad-row" style="grid-template-columns:${gridCols}">
-          <div class="cuad-emp" style="font-weight:600; font-size:13px; color:#333; padding-left:15px">
-            ${p.tipoTurno}
-          </div>
+          <div class="cuad-emp" style="padding-left:15px">${nombre}</div>
           ${rowTurnos}
         </div>`;
     });
   });
 
-  const container = document.getElementById('cuadranteTable');
-  if (container) container.innerHTML = htmlFinal || '<div style="padding:20px; text-align:center">No hay turnos asignados.</div>';
+  document.getElementById('cuadranteTable').innerHTML = htmlFinal || '<div style="padding:20px;">No hay turnos.</div>';
 }
+
 // ── EMPLEADOS ──
 function renderEmpleados() {
   const search = document.getElementById('searchEmp').value.toLowerCase();
@@ -300,69 +232,67 @@ function renderEmpleados() {
   if (store) emps = emps.filter(e => e.tienda === store);
 
   const rows = emps.map(emp => {
-    const horas = calcHorasMes(emp.id);
-    const contrato = parseInt(emp.horasContrato) || 160;
-    const pct = Math.min(100, Math.round((horas / contrato) * 100));
     const storeColor = CONFIG.STORE_COLORS[emp.tienda] || '#888';
-    
     return `
       <tr>
-        <td>
-          <div class="emp-name-cell">
-            <div class="avatar-sm" style="${avatarStyle(emp.nombre)}">${initials(emp.nombre)}</div>
-            ${emp.nombre}
-          </div>
-        </td>
+        <td>${emp.nombre}</td>
         <td><span class="store-tag" style="border-color:${storeColor};color:${storeColor}">${emp.tienda}</span></td>
-        <td>${emp.horasContrato || 40}h/sem</td>
-        <td>
-          <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
-        </td>
+        <td>${emp.horasContrato || 40}h</td>
         <td><span class="badge ${emp.estado === 'activo' ? 'badge-ok' : 'badge-warn'}">${emp.estado}</span></td>
-        <td><button class="btn-sm" onclick="copyLink('${slugify(emp.nombre)}')">Link</button></td>
+        <td><button class="btn-sm" onclick="copyLink('${slugify(emp.nombre)}')">Copiar Link</button></td>
       </tr>`;
   }).join('');
 
   document.getElementById('empTable').innerHTML = `<table>
-    <thead><tr><th>Empleado</th><th>Tienda</th><th>Contrato</th><th>Carga Mes</th><th>Estado</th><th>Acción</th></tr></thead>
-    <tbody>${rows || '<tr><td colspan="6">No hay resultados</td></tr>'}</tbody>
+    <thead><tr><th>Empleado</th><th>Tienda</th><th>Contrato</th><th>Estado</th><th>Link</th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="5">Sin resultados</td></tr>'}</tbody>
   </table>`;
 }
 
-// ── OTRAS FUNCIONES ──
+// ── TIENDAS (Daba el error de consola) ──
 function renderTiendas() {
-  const tiendas = [...new Set(DATA.empleados.map(e => e.tienda))].filter(Boolean);
-  if (!activeStore) activeStore = tiendas[0];
-  document.getElementById('storeTabs').innerHTML = tiendas.map(t => `
-    <button class="store-tab ${t === activeStore ? 'active' : ''}" onclick="selectStoreDet('${t}')">${t}</button>
-  `).join('');
+  const tiendas = [...new Set(DATA.empleados.map(e => e.tienda))].filter(Boolean).sort();
+  if (!activeStore && tiendas.length > 0) activeStore = tiendas[0];
+  
+  const tabs = document.getElementById('storeTabs');
+  if(tabs) {
+    tabs.innerHTML = tiendas.map(t => `
+      <button class="store-tab ${t === activeStore ? 'active' : ''}" onclick="selectStoreDet('${t}')">${t}</button>
+    `).join('');
+  }
   renderStoreDetail(activeStore);
 }
 
-function selectStoreDet(t) { activeStore = t; renderTiendas(); }
+function selectStoreDet(t) { 
+  activeStore = t; 
+  renderTiendas(); 
+}
 
 function renderStoreDetail(tienda) {
+  if(!tienda) return;
   const emps = DATA.empleados.filter(e => e.tienda === tienda);
-  const html = emps.map(e => `<div class="monthly-row">
-    <div class="avatar-xs" style="${avatarStyle(e.nombre)}">${initials(e.nombre)}</div>
-    <span>${e.nombre}</span>
-  </div>`).join('');
-  document.getElementById('storeDetail').innerHTML = `<div class="panel"><div class="panel-title">Equipo ${tienda}</div>${html}</div>`;
+  const html = emps.map(e => `
+    <div style="padding:10px; border-bottom:1px solid #eee; display:flex; justify-content:space-between;">
+      <span>${e.nombre}</span>
+      <span style="color:#666; font-size:12px;">${e.horasContrato}h</span>
+    </div>`).join('');
+  const detail = document.getElementById('storeDetail');
+  if(detail) detail.innerHTML = `<div class="panel"><div class="panel-title">Equipo ${tienda}</div>${html}</div>`;
 }
 
 function renderIncidencias() {
   const incs = DATA.incidencias || [];
-  const html = incs.map(i => `
+  const container = document.getElementById('incidenciasList');
+  if(!container) return;
+  
+  container.innerHTML = incs.map(i => `
     <div class="incidencia-item">
-      <div class="inc-body">
-        <strong>${i.tipo.toUpperCase()}: ${i.titulo || 'Nota'}</strong>
-        <div class="inc-detail">${i.detalle || ''}</div>
-      </div>
-      <span class="badge ${i.urgencia === 'urgente' ? 'badge-danger' : 'badge-info'}">${i.estado}</span>
-    </div>`).join('');
-  document.getElementById('incidenciasList').innerHTML = html || 'Sin incidencias';
+      <div><strong>${i.tipo.toUpperCase()}</strong>: ${i.nombre}</div>
+      <span class="badge badge-info">${i.estado}</span>
+    </div>`).join('') || 'Sin incidencias';
 }
 
+// ── HELPERS ──
 function populateStoreFilters() {
   const tiendas = [...new Set(DATA.empleados.map(e => e.tienda))].filter(Boolean).sort();
   ['filterStore', 'filterEmpStore'].forEach(id => {
@@ -372,23 +302,6 @@ function populateStoreFilters() {
         tiendas.map(t => `<option value="${t}">${t}</option>`).join('');
     }
   });
-}
-
-// ── HELPERS ──
-function calcHorasMes(empId) {
-  const emp = DATA.empleados.find(e => e.id === empId);
-  if (!emp) return 0;
-  const mesActual = new Date().getMonth();
-  return DATA.turnos
-    .filter(t => t.nombre === emp.nombre && new Date(t.fecha).getMonth() === mesActual)
-    .reduce((acc, t) => acc + (CONFIG.HORAS_TURNO[t.turno] || 0), 0);
-}
-
-function calcHorasSemana() {
-  const days = weekDays(currentWeekStart);
-  return DATA.turnos
-    .filter(t => days.includes(t.fecha))
-    .reduce((acc, t) => acc + (CONFIG.HORAS_TURNO[t.turno] || 0), 0);
 }
 
 function getMonday(d) {
@@ -404,52 +317,28 @@ function addDays(d, n) { const r = new Date(d); r.setDate(r.getDate() + n); retu
 function weekDays(monday) { return Array.from({length: 7}, (_, i) => toDateStr(addDays(monday, i))); }
 function toDateStr(d) { return d.toISOString().slice(0, 10); }
 function formatTime(d) { return d.toLocaleTimeString('es-ES', {hour: '2-digit', minute: '2-digit'}); }
-function formatWeekRange(d1, d2) { return `Del ${d1.split('-')[2]} al ${d2.split('-')[2]} de ${new Date(d2).toLocaleString('es-ES', {month: 'long'})}`; }
-function initials(n) { return n ? n.split(' ').map(p => p[0]).join('').toUpperCase() : '??'; }
-function avatarStyle(n) { 
-  const colors = [['#FFF3E8','#C0620E'], ['#E6F1FB','#185FA5'], ['#EAF3DE','#3B6D11']];
-  const c = colors[n ? n.length % colors.length : 0];
-  return `background:${c[0]};color:${c[1]}`;
-}
+function formatWeekRange(d1, d2) { return `Semana del ${d1.split('-')[2]} al ${d2.split('-')[2]}`; }
 function slugify(s) { return s ? s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-') : ''; }
 
-// --- NUEVA FUNCIÓN DE PUBLICACIÓN POR TIENDAS ---
 function showPublishLinks() {
   const days = weekDays(currentWeekStart);
   const range = formatWeekRange(days[0], days[6]);
   const tiendas = [...new Set(DATA.turnos.filter(t => days.includes(t.fecha)).map(t => t.tienda))].filter(Boolean).sort();
-
-  // ESTO ES LO IMPORTANTE: Detecta la ruta real donde están tus archivos
-  const currentPath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1);
-  const baseAddr = window.location.origin + currentPath;
+  const baseAddr = window.location.origin + window.location.pathname.replace('index.html', '');
 
   let html = `
-    <div id="publishModal" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10000; display:flex; align-items:center; justify-content:center; padding:20px; font-family:sans-serif;">
-      <div style="background:white; width:100%; max-width:450px; max-height:85vh; overflow-y:auto; border-radius:20px; padding:25px; position:relative; box-shadow: 0 20px 40px rgba(0,0,0,0.4);">
-        <button onclick="document.getElementById('publishModal').remove()" style="position:absolute; top:15px; right:15px; border:none; background:#eee; width:30px; height:30px; border-radius:50%; cursor:pointer;">✕</button>
-        <h2 style="margin-top:0; color:#1a1a1a; font-size:20px;">🚀 Publicar Semana</h2>
-        <p style="color:#666; font-size:14px; margin-bottom:25px;">${range}</p>
-        <div id="publishList">`;
+    <div id="publishModal" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:1000; display:flex; align-items:center; justify-content:center; padding:20px;">
+      <div style="background:white; width:100%; max-width:400px; border-radius:15px; padding:20px; position:relative;">
+        <button onclick="document.getElementById('publishModal').remove()" style="position:absolute; top:10px; right:10px;">✕</button>
+        <h3>Publicar Semana</h3>
+        <div style="max-height:60vh; overflow-y:auto;">`;
 
   tiendas.forEach(tienda => {
-    const color = CONFIG.STORE_COLORS[tienda] || '#888';
-    // Link corregido
-    const linkTienda = `${baseAddr}tienda.html?tienda=${encodeURIComponent(tienda)}&start=${days[0]}`;
-    
+    const link = `${baseAddr}tienda.html?tienda=${encodeURIComponent(tienda)}&start=${days[0]}`;
     html += `
-      <div style="border:1px solid #e0e0e0; border-radius:12px; padding:15px; margin-bottom:20px; background:#fff;">
-        <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
-          <div style="width:14px; height:14px; background:${color}; border-radius:4px;"></div>
-          <strong style="font-size:16px;">${tienda}</strong>
-        </div>
-        <div style="background:#f1f3f5; border-radius:8px; padding:12px; font-size:13px; color:#444; margin-bottom:12px;">
-          📍 *CUADRANTE ${tienda.toUpperCase()}*<br>🗓️ ${range}<br><br>
-          Checkea tus turnos aquí:<br>👉 ${linkTienda}
-        </div>
-        <button onclick="copyToClipboard(this, '${tienda}', '${linkTienda}', '${range}')" 
-          style="width:100%; background:${color}; color:white; border:none; padding:12px; border-radius:8px; cursor:pointer; font-weight:600;">
-          Copiar para WhatsApp
-        </button>
+      <div style="margin-bottom:15px; padding:10px; border:1px solid #eee; border-radius:8px;">
+        <strong>${tienda}</strong>
+        <button onclick="copyToClipboard('${tienda}', '${link}', '${range}')" style="display:block; width:100%; margin-top:5px;">Copiar WhatsApp</button>
       </div>`;
   });
 
@@ -457,19 +346,14 @@ function showPublishLinks() {
   document.body.insertAdjacentHTML('beforeend', html);
 }
 
-// la "magia" de copiar
-function copyToClipboard(btn, tienda, link, range) {
-  const texto = `📍 *CUADRANTE ${tienda.toUpperCase()}*\n🗓️ ${range}\n\nCheckea tus turnos aquí:\n👉 ${link}`;
-  
-  navigator.clipboard.writeText(texto).then(() => {
-    const originalContent = btn.innerHTML;
-    btn.style.background = "#25D366";
-    btn.innerHTML = "✅ ¡Copiado!";
-    
-    setTimeout(() => {
-      btn.style.background = CONFIG.STORE_COLORS[tienda] || '#888';
-      btn.innerHTML = originalContent;
-    }, 2000);
-  });
+function copyToClipboard(tienda, link, range) {
+  const txt = `📍 CUADRANTE ${tienda}\n🗓️ ${range}\n🔗 Ver aquí: ${link}`;
+  navigator.clipboard.writeText(txt).then(() => alert("Copiado para " + tienda));
 }
-function copyLink(s) { navigator.clipboard.writeText(`${CONFIG.BASE_URL}/empleado.html?emp=${s}`); alert("Copiado"); }
+
+function calcHorasSemana() {
+  const days = weekDays(currentWeekStart);
+  return DATA.turnos
+    .filter(t => days.includes(t.fecha))
+    .reduce((acc, t) => acc + (CONFIG.HORAS_TURNO[t.turno] || 0), 0).toFixed(1);
+}
