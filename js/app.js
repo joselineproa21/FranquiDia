@@ -354,6 +354,78 @@ function renderCuadrante() {
   if (container) container.innerHTML = htmlFinal || '<div style="padding:20px; text-align:center">No hay turnos para esta semana.</div>';
 }
 
+// ── EMPLEADOS ──
+
+function renderEmpleados() {
+  const search = document.getElementById('searchEmp').value.toLowerCase();
+  const store  = document.getElementById('filterEmpStore').value;
+
+  let emps = DATA.empleados;
+  if (search) emps = emps.filter(e => e.nombre.toLowerCase().includes(search));
+  if (store)  emps = emps.filter(e => e.tienda === store);
+
+  document.getElementById('empCount').textContent = emps.length + ' empleados' + (store ? ' en ' + store : '');
+
+  const rows = emps.map(emp => {
+    const horas = calcHorasMes(emp.id);
+    const contrato = parseInt(emp.horasContrato) || 160;
+    const pct = Math.min(100, Math.round((horas / contrato) * 100));
+    const horasExtra = DATA.turnos
+      .filter(t => {
+        const emp = DATA.empleados.find(e => e.id === empId);
+        return emp && t.nombre === emp.nombre && (t.turno === 'XM' || t.turno === 'XT');
+      })
+      .reduce((acc, t) => acc + (CONFIG.HORAS_TURNO[t.turno] || 0), 0);
+    const extrasPendientes = DATA.incidencias.filter(i =>
+      i.empleadoId === empId && i.tipo === 'extra' && i.estado === 'pendiente'
+    ).length;
+    const exceso = horasExtra;
+    const extrasHtml = exceso > 0
+      ? `<strong style="color:#E24B4A">+${exceso}h</strong>`
+      : `<span style="color:var(--text3)">0h</span>`;
+    const stateClass = { activo: 'badge-ok', vacaciones: 'badge-info', baja: 'badge-warn' }[emp.estado] || 'badge-info';
+    const stateLabel = { activo: 'Activo/a', vacaciones: 'Vacaciones', baja: 'Baja médica' }[emp.estado] || emp.estado;
+    const storeColor = CONFIG.STORE_COLORS[emp.tienda] || '#888';
+    const linkSlug = slugify(emp.nombre);
+    return `
+      <tr>
+        <td>
+          <div class="emp-name-cell">
+            <div class="avatar-sm" style="${avatarStyle(emp.nombre)}">${initials(emp.nombre)}</div>
+            ${emp.nombre}
+          </div>
+        </td>
+        <td><span class="store-tag" style="border-color:${storeColor};color:${storeColor}">${emp.tienda}</span></td>
+        <td>
+          <div>${emp.puesto || '—'}</div>
+          <div style="font-size:11px;color:var(--text3)">${emp.horasContrato || 40}h/sem</div>
+        </td>
+        <td>
+          <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+          <span style="font-size:11px;color:var(--text2);margin-left:4px">${calcVacUsadas(emp.id)}/30 días</span>
+        </td>
+        <td>${extrasHtml}</td>
+        <td><span class="badge ${stateClass}">${stateLabel}</span></td>
+        <td>
+          <button class="btn-sm" onclick="copyLink('${linkSlug}')" title="Copiar link del empleado">Link</button>
+        </td>
+      </tr>`;
+  }).join('');
+
+  document.getElementById('empTable').innerHTML = `
+    <div class="emp-table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Empleado</th><th>Tienda</th><th>Contrato</th>
+            <th>Vacaciones</th><th>H. extra</th><th>Estado</th><th></th>
+          </tr>
+        </thead>
+        <tbody>${rows || '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3)">Sin resultados</td></tr>'}</tbody>
+      </table>
+    </div>`;
+}
+
 // ── TIENDAS ──
 function renderTiendas() {
   const tiendas = [...new Set(DATA.empleados.map(e => e.tienda))];
