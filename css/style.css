@@ -379,3 +379,9 @@ body {
   .two-col { grid-template-columns: 1fr; }
   .header-nav { display: none; }
 }
+
+/* Envuelve tus tablas en un div con esta clase si notas que se cortan en el móvil */
+.emp-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch; /* Suavidad en iPhone/iPad */
+}
