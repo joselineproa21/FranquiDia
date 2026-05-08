@@ -173,7 +173,6 @@ function renderCuadrante() {
   const hoy = toDateStr(new Date());
   const storeFilter = document.getElementById('filterStore').value;
   const nombresDias = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
-  const TIPOS_TURNO = ['M', 'T', 'MT']; // Mañana, Tarde, Partido
 
   document.getElementById('weekLabel').textContent = formatWeekRange(days[0], days[6]);
 
@@ -185,9 +184,9 @@ function renderCuadrante() {
   const gridCols = `180px repeat(7, 1fr)`;
   let htmlFinal = ""; 
 
-  // LEYENDA AL PRINCIPIO
+  // 1. LEYENDA AL PRINCIPIO (Como pediste)
   htmlFinal += `
-    <div class="panel" style="margin-bottom:15px; display:flex; gap:10px; font-size:12px;">
+    <div class="panel" style="margin-bottom:15px; display:flex; gap:10px; font-size:12px; flex-wrap:wrap;">
       <span class="pill pill-m">M: Mañana</span>
       <span class="pill pill-t">T: Tarde</span>
       <span class="pill pill-mt">MT: Partido</span>
@@ -198,48 +197,55 @@ function renderCuadrante() {
     if (storeFilter && tienda !== storeFilter) return;
     const color = CONFIG.STORE_COLORS[tienda] || '#888';
     
-    // Encabezado de la tienda
+    // 2. FILTRADO DE PERSONAS: Solo quienes tengan turnos reales (No VAC, No B)
+    const nombresUnicos = [...new Set(DATA.turnos
+      .filter(t => {
+          const esDeEstaTienda = t.tienda === tienda && days.includes(t.fecha);
+          const estaActivo = t.turno !== 'VAC' && t.turno !== 'B';
+          return esDeEstaTienda && estaActivo;
+      })
+      .map(t => t.nombre.trim()))].sort();
+
+    if (nombresUnicos.length === 0) return;
+
+    // Encabezado de la Tienda
     htmlFinal += `
       <div style="grid-column:1/-1; background:${color}11; border-left:4px solid ${color}; padding:10px; font-weight:bold; margin-top:15px; display:grid; grid-template-columns:${gridCols}">
         <div style="color:${color}">📍 ${tienda}</div>
         ${nombresDias.map(dia => `<div style="text-align:center; font-size:11px; color:#666">${dia}</div>`).join('')}
       </div>`;
 
-    // Renderizamos por tipo de turno (Mañana, Tarde, Partido)
-    TIPOS_TURNO.forEach(tipo => {
-      const labelTurno = tipo === 'M' ? '☀️ Mañana' : tipo === 'T' ? '🌙 Tarde' : '🕒 Partido';
-      
+    // 3. UNA FILA POR PERSONA (Diseño original)
+    nombresUnicos.forEach(nombre => {
       const rowTurnos = days.map(d => {
-        // Buscamos empleados para este tipo de turno en este día, excluyendo VAC y B
-        const turnosDia = DATA.turnos.filter(t => 
-          t.tienda === tienda && 
-          t.fecha === d && 
-          t.turno === tipo &&
-          t.turno !== 'VAC' && 
-          t.turno !== 'B'
+        const t = DATA.turnos.find(turno => 
+          turno.nombre.trim() === nombre && 
+          turno.tienda === tienda && 
+          turno.fecha === d
         );
+        
+        const val = t ? t.turno : 'L';
+        
+        // Lógica de visualización: Si es L, VAC o B -> Ponemos un guion "-"
+        const mostrarGuion = ['L', 'VAC', 'B'].includes(val);
+        const labelAMostrar = mostrarGuion ? '-' : val;
+        const clasePill = mostrarGuion ? 'l' : val.toLowerCase();
 
-        if (turnosDia.length === 0) {
-          return `<div class="cuad-cell ${d === hoy ? 'today-col' : ''}"><span class="pill pill-l">-</span></div>`;
-        }
-
-        // Si hay empleados, ponemos sus nombres
-        const nombres = turnosDia.map(t => t.nombre.split(' ')[0]).join(', ');
         return `
           <div class="cuad-cell ${d === hoy ? 'today-col' : ''}">
-            <span class="pill pill-${tipo.toLowerCase()}">${nombres}</span>
+            <span class="pill pill-${clasePill}">${labelAMostrar}</span>
           </div>`;
       }).join('');
 
       htmlFinal += `
         <div class="cuad-row" style="grid-template-columns:${gridCols}">
-          <div class="cuad-emp" style="padding-left:15px; font-weight:500; color:#444">${labelTurno}</div>
+          <div class="cuad-emp" style="padding-left:15px; font-weight:500;">${nombre}</div>
           ${rowTurnos}
         </div>`;
     });
   });
 
-  document.getElementById('cuadranteTable').innerHTML = htmlFinal || '<div style="padding:20px;">No hay turnos registrados.</div>';
+  document.getElementById('cuadranteTable').innerHTML = htmlFinal || '<div style="padding:20px;">No hay turnos para mostrar.</div>';
 }
 
 // ── EMPLEADOS ──
