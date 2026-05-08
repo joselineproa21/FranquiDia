@@ -188,141 +188,111 @@ function renderResumen() {
 }
 
 // ── CUADRANTE ──
-// Una fila por empleado. Cada celda muestra el turno de ese día (puede variar
-// si el empleado trabaja en tiendas distintas durante la semana).
+
 function renderCuadrante() {
-  const days        = weekDays(currentWeekStart);
-  const hoy         = toDateStr(new Date());
+  const days = weekDays(currentWeekStart);
+  const hoy = toDateStr(new Date());
   const storeFilter = document.getElementById('filterStore').value;
-  const turnoFilter = document.getElementById('filterTurno').value;
+  const nombresDias = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
   document.getElementById('weekLabel').textContent = formatWeekRange(days[0], days[6]);
 
-  // Alertas de festivos en esta semana
-  const festivosSemana = days.filter(d => esFestivo(d));
-  document.getElementById('festivoWeekAlert').innerHTML = festivosSemana.map(d => {
-    const f = getFestivo(d);
-    return `<div class="festivo-bar ${f.tipo === 'cierre' ? 'festivo-danger' : ''}">
-      <strong>${formatDateLong(d)} — ${f.nombre}:</strong>
-      ${f.tipo === 'cierre' ? 'Tiendas cerradas' : 'Horario reducido 10:00–15:00'}
+  // 1. Leyenda en la parte superior
+  const leyendaHTML = `
+    <div class="leyenda-cuadrante" style="display:flex; gap:10px; margin-bottom:15px; flex-wrap:wrap; background:#f9f9f9; padding:10px; border-radius:8px; border:1px solid #eee; font-size:11px">
+      <div style="display:flex; align-items:center; gap:5px"><span class="pill pill-m" style="padding:2px 6px">M</span> Mañana</div>
+      <div style="display:flex; align-items:center; gap:5px"><span class="pill pill-t" style="padding:2px 6px">T</span> Tarde</div>
+      <div style="display:flex; align-items:center; gap:5px"><span class="pill pill-mt" style="padding:2px 6px">MT</span> Partido</div>
+      <div style="display:flex; align-items:center; gap:5px"><span class="pill pill-vac" style="padding:2px 6px">VAC</span> Vacaciones</div>
+      <div style="display:flex; align-items:center; gap:5px"><span class="pill pill-l" style="padding:2px 6px">L</span> Libranza</div>
     </div>`;
-  }).join('');
 
-  // Lista base de empleados activos
-  let emps = DATA.empleados.filter(e => e.estado === 'activo');
+  const tiendasConTurnos = [...new Set(DATA.turnos
+    .filter(t => days.includes(t.fecha))
+    .map(t => t.tienda))]
+    .filter(Boolean).sort();
 
-  // Filtro por tienda: incluye empleado si tiene al menos 1 turno en esa tienda esta semana
-  if (storeFilter) {
-    emps = emps.filter(emp =>
-      days.some(d => {
-        const t = getTurnoCompleto(emp.nombre, d);
-        return t && t.tienda === storeFilter;
-      })
-    );
-  }
+  const gridCols = `180px repeat(7, 1fr)`;
+  let htmlFinal = leyendaHTML; 
 
-  // Filtro por turno
-  if (turnoFilter) {
-    emps = emps.filter(emp =>
-      days.some(d => {
-        const t = getTurnoCompleto(emp.nombre, d);
-        return t && t.turno === turnoFilter;
-      })
-    );
-  }
+  tiendasConTurnos.forEach(tienda => {
+    if (storeFilter && tienda !== storeFilter) return;
+    const color = CONFIG.STORE_COLORS[tienda] || '#888';
+    
+    let personasData = [];
+    const nombresUnicos = [...new Set(DATA.turnos
+      .filter(t => t.tienda === tienda && days.includes(t.fecha) && !['L', 'VAC', 'F', 'B'].includes(t.turno))
+      .map(t => t.nombre))];
 
-  // Agrupamos por tienda base del empleado para separar visualmente
-  const tiendas = [...new Set(emps.map(e => e.tienda))].sort();
-  const gridCols = `160px repeat(${days.length}, 1fr)`;
+    nombresUnicos.forEach(nombre => {
+      // Analizamos todos los turnos de la semana para este empleado
+      const turnosSemana = DATA.turnos.filter(t => 
+        t.nombre === nombre && t.tienda === tienda && days.includes(t.fecha)
+      );
 
-  // Cabecera de días
-  const headCells = days.map(d => {
-    const isHoy = d === hoy;
-    const fest  = esFestivo(d);
-    const cls   = isHoy ? 'today-h' : fest ? 'festivo-h' : '';
-    return `<div class="cuad-head-cell ${cls}">${formatDayHeader(d)}${fest ? ' ★' : ''}</div>`;
-  }).join('');
+      // Calculamos la prioridad: si tiene alguna 'M', va al grupo 1. Si no, si tiene 'T', al grupo 2.
+      let prioridad = 3; // Por defecto partido/otros
+      let etiquetaPrincipal = 'Partido';
 
-  // Filas agrupadas por tienda
-  let rowsHtml = '';
+      if (turnosSemana.some(t => t.turno === 'M')) {
+        prioridad = 1;
+        etiquetaPrincipal = 'Mañana';
+      } else if (turnosSemana.some(t => t.turno === 'T')) {
+        prioridad = 2;
+        etiquetaPrincipal = 'Tarde';
+      }
 
-  tiendas.forEach(tienda => {
-    const empsStore = emps.filter(e => e.tienda === tienda);
-    const storeColor = CONFIG.STORE_COLORS[tienda] || '#888';
+      personasData.push({
+        nombre: nombre,
+        tipoTurno: etiquetaPrincipal,
+        prioridad: prioridad
+      });
+    });
 
-    // Separador de tienda
-    rowsHtml += `
-      <div style="
-        grid-column: 1 / -1;
-        display: grid;
-        grid-template-columns: ${gridCols};
-        background: var(--surface2);
-        border-top: 0.5px solid var(--border2);
-        border-bottom: 0.5px solid var(--border);
-      ">
-        <div style="
-          padding: 5px 10px;
-          font-size: 11px;
-          font-weight: 600;
-          color: ${storeColor};
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          grid-column: 1 / -1;
-        ">
-          <span style="width:8px;height:8px;border-radius:50%;background:${storeColor};display:inline-block"></span>
-          ${tienda}
-        </div>
+    // ORDENACIÓN: Esto hace que los bloques de "Mañana" salgan arriba de los de "Tarde"
+    personasData.sort((a, b) => a.prioridad - b.prioridad);
+
+    if (personasData.length === 0) return;
+
+    htmlFinal += `
+      <div style="grid-column:1/-1; background:${color}22; border-left:4px solid ${color}; padding:10px; font-weight:bold; margin-top:15px; display:grid; grid-template-columns:${gridCols}">
+        <div style="color:${color}">📍 ${tienda}</div>
+        ${nombresDias.map(dia => `<div style="text-align:center; font-size:11px; text-transform:uppercase; color:#666">${dia}</div>`).join('')}
       </div>`;
 
-    // Una fila por empleado
-    empsStore.forEach(emp => {
-      const cells = days.map(d => {
-        const entry  = getTurnoCompleto(emp.nombre, d); // { turno, tienda } | null
-        const turno  = entry ? entry.turno : null;
-        const tiendaDia = entry ? entry.tienda : null;
-        const isHoy  = d === hoy;
-        const fest   = esFestivo(d);
-        const colCls = isHoy ? 'today-col' : fest ? 'festivo-col' : '';
+    personasData.forEach(p => {
+      const primerNombre = p.nombre.split(' ')[0];
 
-        // Si el empleado trabaja en una tienda distinta ese día, añadimos indicador
-        const tiendaDistinta = tiendaDia && tiendaDia !== emp.tienda;
-        const tiendaTag = tiendaDistinta
-          ? `<div style="font-size:9px;color:${CONFIG.STORE_COLORS[tiendaDia]||'#888'};margin-top:1px;font-weight:600">${tiendaDia}</div>`
-          : '';
+      const rowTurnos = days.map(d => {
+        const t = DATA.turnos.find(turno => 
+          turno.nombre === p.nombre && turno.tienda === tienda && turno.fecha === d
+        );
 
-        const pillHtml = turno
-          ? `<span class="pill pill-${turno.toLowerCase()}">${turno}</span>${tiendaTag}`
-          : `<span class="pill pill-v" style="color:var(--text3)">—</span>`;
+        const val = t ? t.turno : 'L';
+        const isHoy = d === hoy;
+        const esInactivo = ['L', 'VAC', 'F', 'B'].includes(val);
+        const textoCelda = esInactivo ? '-' : primerNombre;
 
-        return `<div class="cuad-cell ${colCls}" style="flex-direction:column;gap:0">${pillHtml}</div>`;
+        return `
+          <div class="cuad-cell ${isHoy ? 'today-col' : ''}" style="${esInactivo ? 'opacity:0.4' : ''}">
+            <span class="pill pill-${val.toLowerCase()}" style="font-size: 10px; padding: 2px 6px;">
+              ${textoCelda}
+            </span>
+          </div>`;
       }).join('');
 
-      rowsHtml += `
+      htmlFinal += `
         <div class="cuad-row" style="grid-template-columns:${gridCols}">
-          <div class="cuad-emp">
-            <div class="avatar-xs" style="${avatarStyle(emp.nombre)}">${initials(emp.nombre)}</div>
-            <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
-              ${emp.nombre}
-            </span>
+          <div class="cuad-emp" style="font-weight:600; font-size:13px; color:#333; padding-left:15px">
+            ${p.tipoTurno}
           </div>
-          ${cells}
+          ${rowTurnos}
         </div>`;
     });
   });
 
-  if (!rowsHtml) {
-    rowsHtml = '<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">Sin empleados para este filtro</div>';
-  }
-
-  document.getElementById('cuadranteTable').innerHTML = `
-    <div class="cuadrante">
-      <div class="cuad-head" style="grid-template-columns:${gridCols}">
-        <div class="cuad-head-cell" style="text-align:left;padding-left:10px">Empleado</div>
-        ${headCells}
-      </div>
-      ${rowsHtml}
-    </div>`;
+  const container = document.getElementById('cuadranteTable');
+  if (container) container.innerHTML = htmlFinal || '<div style="padding:20px; text-align:center">No hay turnos asignados.</div>';
 }
 
 // ── EMPLEADOS ──
