@@ -228,7 +228,7 @@ function renderCuadrante() {
         ${nombresDias.map(dia => `<div style="text-align:center; font-size:11px; text-transform:uppercase; color:#666">${dia}</div>`).join('')}
       </div>`;
 
-    // 2. Creamos una fila por cada tipo de turno (Mañana, Tarde, Partido)
+    // 2. Creamos una fila por cada tipo de turno (Mañana, Tarde, Partido, Mañana 2)
     TIPOS_TURNO_ORDEN.forEach(tipoActual => {
       const labelTurno = tipoActual === 'M' ? '☀️ Mañana' : tipoActual === 'T' ? '🌙 Tarde' : tipoActual === 'MT' ? '🕒 Partido' : '☀️ Mañana 2';
       
