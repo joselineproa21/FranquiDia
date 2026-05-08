@@ -417,53 +417,43 @@ function slugify(s) { return s ? s.toLowerCase().normalize('NFD').replace(/[\u03
 function showPublishLinks() {
   const days = weekDays(currentWeekStart);
   const range = formatWeekRange(days[0], days[6]);
-  
-  // Obtenemos las tiendas que tienen turnos esta semana
-  const tiendas = [...new Set(DATA.turnos
-    .filter(t => days.includes(t.fecha))
-    .map(t => t.tienda))]
-    .filter(Boolean).sort();
+  const tiendas = [...new Set(DATA.turnos.filter(t => days.includes(t.fecha)).map(t => t.tienda))].filter(Boolean).sort();
+
+  // ESTO ES LO IMPORTANTE: Detecta la ruta real donde están tus archivos
+  const currentPath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1);
+  const baseAddr = window.location.origin + currentPath;
 
   let html = `
-    <div id="publishModal" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10000; display:flex; align-items:center; justify-content:center; padding:20px; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+    <div id="publishModal" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10000; display:flex; align-items:center; justify-content:center; padding:20px; font-family:sans-serif;">
       <div style="background:white; width:100%; max-width:450px; max-height:85vh; overflow-y:auto; border-radius:20px; padding:25px; position:relative; box-shadow: 0 20px 40px rgba(0,0,0,0.4);">
-        <button onclick="document.getElementById('publishModal').remove()" style="position:absolute; top:15px; right:15px; border:none; background:#eee; width:30px; height:30px; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; font-weight:bold;">✕</button>
-        
-        <h2 style="margin-top:0; color:#1a1a1a; font-size:20px; letter-spacing:-0.5px;">🚀 Publicar Semana</h2>
-        <p style="color:#666; font-size:14px; margin-bottom:25px; border-bottom:1px solid #eee; padding-bottom:10px;">${range}</p>
-        
+        <button onclick="document.getElementById('publishModal').remove()" style="position:absolute; top:15px; right:15px; border:none; background:#eee; width:30px; height:30px; border-radius:50%; cursor:pointer;">✕</button>
+        <h2 style="margin-top:0; color:#1a1a1a; font-size:20px;">🚀 Publicar Semana</h2>
+        <p style="color:#666; font-size:14px; margin-bottom:25px;">${range}</p>
         <div id="publishList">`;
 
-   tiendas.forEach(tienda => {
-      const color = CONFIG.STORE_COLORS[tienda] || '#888';
-      // Link simulado (ajusta CONFIG.BASE_URL si es necesario)
-      const linkTienda = `${CONFIG.BASE_URL || 'https://tu-app.com'}/tienda.html?tienda=${encodeURIComponent(tienda)}&start=${days[0]}`;
+  tiendas.forEach(tienda => {
+    const color = CONFIG.STORE_COLORS[tienda] || '#888';
+    // Link corregido
+    const linkTienda = `${baseAddr}tienda.html?tienda=${encodeURIComponent(tienda)}&start=${days[0]}`;
     
     html += `
-      <div class="publish-card" style="border:1px solid #e0e0e0; border-radius:12px; padding:15px; margin-bottom:20px; background:#fff; box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
+      <div style="border:1px solid #e0e0e0; border-radius:12px; padding:15px; margin-bottom:20px; background:#fff;">
         <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
           <div style="width:14px; height:14px; background:${color}; border-radius:4px;"></div>
-          <strong style="font-size:16px; color:#333;">${tienda}</strong>
+          <strong style="font-size:16px;">${tienda}</strong>
         </div>
-        
-        <div id="text-${tienda.replace(/\s+/g, '')}" style="background:#f1f3f5; border-radius:8px; padding:12px; font-size:13px; color:#444; line-height:1.5; margin-bottom:12px; border:1px solid #e9ecef;">
-          📍 *CUADRANTE ${tienda.toUpperCase()}*<br>
-          🗓️ ${range}<br><br>
-          Checkea tus turnos aquí:<br>
-          👉 <span style="color:#007bff; text-decoration:underline;">${linkTienda}</span>
+        <div style="background:#f1f3f5; border-radius:8px; padding:12px; font-size:13px; color:#444; margin-bottom:12px;">
+          📍 *CUADRANTE ${tienda.toUpperCase()}*<br>🗓️ ${range}<br><br>
+          Checkea tus turnos aquí:<br>👉 ${linkTienda}
         </div>
-        
         <button onclick="copyToClipboard(this, '${tienda}', '${linkTienda}', '${range}')" 
-          style="width:100%; background:${color}; color:white; border:none; padding:12px; border-radius:8px; cursor:pointer; font-weight:600; transition:all 0.2s; display:flex; align-items:center; justify-content:center; gap:8px;">
-          <span>Copiar para WhatsApp</span>
+          style="width:100%; background:${color}; color:white; border:none; padding:12px; border-radius:8px; cursor:pointer; font-weight:600;">
+          Copiar para WhatsApp
         </button>
       </div>`;
   });
 
-  html += `</div>
-      <p style="text-align:center; font-size:11px; color:#999; margin-top:10px;">Haz una captura de pantalla si prefieres enviarlo como imagen.</p>
-    </div></div>`;
-  
+  html += `</div></div></div>`;
   document.body.insertAdjacentHTML('beforeend', html);
 }
 
